@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.env
+venv/
+.venv/
+
+# Prolog
+*.qlf
+*~
+
+# OS & Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
