@@ -109,6 +109,16 @@ esegui_test :-
     brano(S3, _, _, _, P3, _, _, _),
     P1 >= P2, P2 >= P3,
     format('  [+] Test 4 (Iso-Principle Monotonico): PASSATO~n'),
+
+    % Test 5: Controindicazione di sicurezza medica (sbarramento)
+    ( \+ sicurezza_e_controindicazioni(adrenaline_rush_rock, user_sarah)
+    -> format('  [+] Test 5 (Controindicazione Sicurezza Medica): PASSATO~n')
+    ;  format('  [!] Test 5: FALLITO~n') ),
+
+    % Test 6: Controindicazione cognitiva (sbarramento)
+    ( \+ compatibile_cognitivo(euphoric_run_anthem, user_marco)
+    -> format('  [+] Test 6 (Controindicazione Cognitiva Studio): PASSATO~n')
+    ;  format('  [!] Test 6: FALLITO~n') ),
     format('[SUCCESS] Tutti i test logici sono stati superati!~n~n').
 
 help :-

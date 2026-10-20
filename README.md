@@ -58,22 +58,35 @@ utente(Id, Nome, Attivita, BattitoCardiaco, LivelloStress, Obiettivo, GeneriPref
 
 ---
 
-## 3. Motore di Inferenza e Regole Logiche (`dss_rules.pl`)
+## 3. Motore di Inferenza: Albero Gerarchico delle Regole (`dss_rules.pl`)
 
-Il DSS valuta due livelli di ammissibilità logica prima di calcolare l'utilità:
+Il motore logico adotta un'architettura ad **albero di inferenza AND-OR (Backward Chaining)** articolata su livelli di astrazione successivi, tipica dei sistemi esperti accademici:
 
-### A. Vincoli sull'Attività Corrente
-1. **Studio / Lavoro Profondo (`deep_focus_study`):** Per non intasare il loop fonologico della memoria di lavoro, è imposto il vincolo:
-   $$\text{Strumentale} \ge 0.70 \quad (\text{zero testo cantato distraente})$$
-2. **Corsa Aerobica (`cardio_running`):** Per ottenere l'effetto ergogenico di sincronizzazione col passo:
-   $$\text{BPM} \ge 120.0 \quad \land \quad \text{Energia} \ge 0.70$$
+```
+[Livello 0: Meta-Regola]
+       brano_raccomandabile(Brano, Utente)
+            |
+            +---> compatibile_fisiologico/2  ---> [Livello 2: stato_simpatico_acuto, regime_aerobico_cardio, ...]
+            |                                      |--> [Livello 3: tempo_lento, energia_bassa, tempo_rapido]
+            |
+            +---> compatibile_cognitivo/2    ---> [Livello 2: protezione_loop_fonologico (Strumentale >= 0.70)]
+            |
+            +---> sicurezza_e_controindicazioni/2 -> [Livello 2: sbarramento tachicardia ed esaurimento da fatica]
+            |
+            +---> coerenza_circadiana/2      ---> [Livello 2: sbarramento orario per induzione al sonno]
+```
 
-### B. Vincoli sull'Obiettivo di Salute
-* **Riduzione Stress (`stress_downregulation`):** Richiede $\text{BPM} \le 75$, $\text{Energia} \le 0.35$ e traccia strumentale.
-* **Sonno (`sleep_induction`):** Richiede $\text{BPM} \le 64$ ed $\text{Energia} \le 0.20$.
-* **Cardio Peak (`cardio_peak_performance`):** Richiede $\text{BPM} \ge 120$ ed $\text{Energia} \ge 0.75$.
+### A. I Quattro Pilastri Ortogonali (Livello 1)
+1. **Compatibilità Fisiologica (`compatibile_fisiologico/2`):**  
+   Valuta lo stato autonomico (simpatico vs parasimpatico). Se l'utente è in stress o battito accelerato, richiede un brano ad azione sedativa (`BPM <= 75`, `Energia <= 0.35`). Se è in corsa cardio, richiede azione ergogenica (`BPM >= 120`, `Energia >= 0.70`).
+2. **Compatibilità Cognitiva (`compatibile_cognitivo/2`):**  
+   In attività di studio o lavoro intellettuale profondo (`deep_focus_study`), preserva il loop fonologico della memoria di lavoro imponendo il vincolo categorico di brani puramente strumentali (`Strumentale >= 0.70`).
+3. **Sicurezza Medica & Sbarramenti Negativi (`sicurezza_e_controindicazioni/2`):**  
+   Previene il sovraccarico: vieta categoricamente brani ad alto tempo o energia ($>100$ BPM o $>0.60$ energia) per utenti già in tachicardia e stress acuto ($>110$ BPM e $>75$ stress).
+4. **Coerenza Circadiana (`coerenza_circadiana/2`):**  
+   Allinea la selezione alla fase biologica: vieta brani eccitanti durante la preparazione al sonno.
 
-### C. Altshuler's Iso-Principle (Entrainment a 3 Stadi)
+### B. Altshuler's Iso-Principle (Musicoterapia Applicata)
 Per soggetti con forte agitazione (es. 114 BPM), proporre immediatamente musica a 60 BPM induce rifiuto. Il predicato `sessione_iso_principle/2` costruisce una sequenza guidata a 3 scalini:
 $$\text{Aggancio (105 BPM)} \longrightarrow \text{Ponte (85 BPM)} \longrightarrow \text{Obiettivo Riposo (60 BPM)}$$
 

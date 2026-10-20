@@ -1,166 +1,249 @@
 % =========================================================================
-% REGOLE DI DECISIONE: dss_rules.pl
-% Decision Support System (DSS) - Music & Health Recommendation
+% REGOLE DI DECISIONE GERARCHICHE: dss_rules.pl
+% Knowledge-Based Decision Support System (Magistrale Computer Science)
+% Architettura di Inferenza ad Albero AND-OR (Backward Chaining)
 % =========================================================================
 
 :- consult('knowledge_base.pl').
 
 % -------------------------------------------------------------------------
-% 1. REGOLE DI AMMISSIBILITÀ BASATE SULL'ATTIVITÀ CORRENTE
+% LIVELLO 0: META-REGOLA DI AMMISSIBILITÀ COMPLESSIVA
 % -------------------------------------------------------------------------
 
-%! ammissibile_per_attivita(+BranoId, +Attivita)
-% Verifica che il brano rispetti i vincoli cognitivi o motori dell'attività.
+%! brano_raccomandabile(+BranoId, +UtenteId)
+% Un brano è raccomandabile se e solo se soddisfa simultaneamente tutti e 4
+% i pilastri di valutazione ortogonali del sistema esperto.
+brano_raccomandabile(BranoId, UtenteId) :-
+    compatibile_fisiologico(BranoId, UtenteId),
+    compatibile_cognitivo(BranoId, UtenteId),
+    sicurezza_e_controindicazioni(BranoId, UtenteId),
+    coerenza_circadiana(BranoId, UtenteId).
 
-% In caso di studio o lavoro profondo: il brano DEVE essere strumentale (>= 0.70)
-% per evitare che le parole cantate interferiscano con la memoria verbale.
-ammissibile_per_attivita(BranoId, deep_focus_study) :-
+% -------------------------------------------------------------------------
+% LIVELLO 1: PILASTRO FISIOLOGICO & BIOMETRICO
+% -------------------------------------------------------------------------
+
+%! compatibile_fisiologico(+BranoId, +UtenteId)
+% Valuta la sincronizzazione tra stato autonomico dell'utente e profilo musicale.
+
+% Caso 1: Utente in stato simpatico acuto (Stress/Battito alto) -> brano sedativo
+compatibile_fisiologico(BranoId, UtenteId) :-
+    stato_simpatico_acuto(UtenteId),
     !,
-    brano(BranoId, _, _, _, _, _, _, Strumentale),
-    Strumentale >= 0.70.
+    brano_azione_sedativa(BranoId).
 
-% In caso di corsa cardio: il brano deve avere un tempo sufficientemente rapido
-% (BPM >= 120) e una carica energetica elevata (Energia >= 0.70) per sincronizzarsi col passo.
-ammissibile_per_attivita(BranoId, cardio_running) :-
+% Caso 2: Utente in regime aerobico intenso (Corsa) -> brano ad effetto ergogenico
+compatibile_fisiologico(BranoId, UtenteId) :-
+    regime_aerobico_cardio(UtenteId),
     !,
-    brano(BranoId, _, _, _, BPM, _, Energia, _),
-    BPM >= 120.0,
-    Energia >= 0.70.
+    brano_azione_ergogenica(BranoId).
 
-% Per tutte le altre attività non vi sono vincoli restrittivi specifici.
-ammissibile_per_attivita(_, _).
+% Caso 3: Utente in preparazione al riposo/sonno -> brano ipno-inducente
+compatibile_fisiologico(BranoId, UtenteId) :-
+    stato_induzione_sonno(UtenteId),
+    !,
+    brano_azione_somnolente(BranoId).
 
-% -------------------------------------------------------------------------
-% 2. REGOLE DI AMMISSIBILITÀ BASATE SULL'OBIETTIVO DI SALUTE
-% -------------------------------------------------------------------------
+% Caso 4: Stato omeostatico ordinario / camminata / recupero
+compatibile_fisiologico(BranoId, UtenteId) :-
+    stato_omeostatico(UtenteId),
+    brano_moderata_attivazione(BranoId).
 
-%! ammissibile_per_obiettivo(+BranoId, +Obiettivo)
-% Verifica che le caratteristiche acustiche del brano soddisfino l'obiettivo clinico.
+% --- SOTTO-REGOLE LIVELLO 2: Riconoscimento dello Stato Fisiologico ---
 
-% Riduzione dello stress acuto: ritmo calmo (BPM <= 75), bassa energia e brano strumentale.
-ammissibile_per_obiettivo(BranoId, stress_downregulation) :-
+stato_simpatico_acuto(UtenteId) :-
+    utente(UtenteId, _, _, Battito, Stress, Obiettivo, _),
+    ( Obiettivo == stress_downregulation
+    ; battito_elevato(Battito), stress_critico(Stress) ).
+
+regime_aerobico_cardio(UtenteId) :-
+    utente(UtenteId, _, Attivita, Battito, _, Obiettivo, _),
+    ( Obiettivo == cardio_peak_performance
+    ; Attivita == cardio_running, Battito >= 120.0 ).
+
+stato_induzione_sonno(UtenteId) :-
+    utente(UtenteId, _, Attivita, _, _, Obiettivo, _),
+    ( Obiettivo == sleep_induction
+    ; Attivita == sleep_preparation ).
+
+stato_omeostatico(UtenteId) :-
+    \+ stato_simpatico_acuto(UtenteId),
+    \+ regime_aerobico_cardio(UtenteId),
+    \+ stato_induzione_sonno(UtenteId).
+
+% --- SOTTO-REGOLE LIVELLO 3: Proprietà Acustiche Funzionali ---
+
+brano_azione_sedativa(BranoId) :-
     brano(BranoId, _, _, _, BPM, _, Energia, Strumentale),
-    BPM =< 75.0,
-    Energia =< 0.35,
+    tempo_lento(BPM),
+    energia_bassa(Energia),
     Strumentale >= 0.70.
 
-% Massimizzazione performance cardio: ritmo veloce (>= 120 BPM) e massima energia.
-ammissibile_per_obiettivo(BranoId, cardio_peak_performance) :-
+brano_azione_ergogenica(BranoId) :-
     brano(BranoId, _, _, _, BPM, _, Energia, _),
-    BPM >= 120.0,
-    Energia >= 0.75.
+    tempo_rapido(BPM),
+    energia_alta(Energia).
 
-% Stato di focus e concentrazione (Flow): tempo medio (70-95 BPM) e musica strumentale.
-ammissibile_per_obiettivo(BranoId, deep_focus_flow) :-
-    brano(BranoId, _, _, _, BPM, _, Energia, Strumentale),
-    BPM >= 70.0, BPM =< 95.0,
-    Energia =< 0.55,
-    Strumentale >= 0.70.
-
-% Induzione del sonno: ritmo molto lento (<= 64 BPM), energia quasi azzerata e acustico.
-ammissibile_per_obiettivo(BranoId, sleep_induction) :-
+brano_azione_somnolente(BranoId) :-
     brano(BranoId, _, _, _, BPM, _, Energia, Strumentale),
     BPM =< 64.0,
     Energia =< 0.20,
     Strumentale >= 0.85.
 
-% Recupero post allenamento: ritmo in decelerazione (<= 105 BPM) ed energia controllata.
-ammissibile_per_obiettivo(BranoId, post_workout_recovery) :-
-    brano(BranoId, _, _, _, BPM, _, Energia, _),
-    BPM =< 105.0,
+brano_moderata_attivazione(BranoId) :-
+    brano(BranoId, _, _, _, BPM, Valenza, Energia, _),
+    BPM >= 70.0, BPM =< 115.0,
+    Energia =< 0.65,
+    Valenza >= 0.40.
+
+% -------------------------------------------------------------------------
+% LIVELLO 1: PILASTRO COGNITIVO (PROTEZIONE MEMORIA DI LAVORO)
+% -------------------------------------------------------------------------
+
+%! compatibile_cognitivo(+BranoId, +UtenteId)
+% Nei task ad alto impegno intellettivo, protegge il loop fonologico da interferenze.
+
+compatibile_cognitivo(BranoId, UtenteId) :-
+    richiede_focus_cognitivo(UtenteId),
+    !,
+    protezione_loop_fonologico(BranoId).
+
+compatibile_cognitivo(_, _). % Nessun vincolo cognitivo se non è in studio
+
+richiede_focus_cognitivo(UtenteId) :-
+    utente(UtenteId, _, Attivita, _, _, Obiettivo, _),
+    ( Attivita == deep_focus_study ; Obiettivo == deep_focus_flow ).
+
+protezione_loop_fonologico(BranoId) :-
+    brano(BranoId, _, _, _, BPM, _, Energia, Strumentale),
+    Strumentale >= 0.70,        % Assoluto divieto di parti vocali cantate
+    BPM >= 70.0, BPM =< 95.0,   % Frequenza coerente con onde alfa cerebrali
     Energia =< 0.55.
 
-% Spostamento / Commute attivo: ritmo allegro (>= 95 BPM) e tono emotivo positivo (Valenza >= 0.60).
-ammissibile_per_obiettivo(BranoId, active_commute_energizer) :-
-    brano(BranoId, _, _, _, BPM, Valenza, _, _),
-    BPM >= 95.0,
-    Valenza >= 0.60.
-
 % -------------------------------------------------------------------------
-% 3. CALCOLO DEL PUNTEGGIO DI UTILITÀ (SCORING)
+% LIVELLO 1: PILASTRO DI SICUREZZA MEDICA & CONTROINDICAZIONI
 % -------------------------------------------------------------------------
 
-%! calcola_punteggio(+BranoId, +UtenteId, -Punteggio)
-% Calcola un punteggio da 0 a 100 per valutare quanto il brano è affine all'utente.
-calcola_punteggio(BranoId, UtenteId, PunteggioFinale) :-
-    utente(UtenteId, _, _, Battito, Stress, Obiettivo, GeneriPreferiti),
-    brano(BranoId, _, _, Genere, BPM, Valenza, Energia, Strumentale),
+%! sicurezza_e_controindicazioni(+BranoId, +UtenteId)
+% Regole di sbarramento negative per prevenire eventi avversi o sovraccarico.
 
-    % 1. Punteggio Biometrico: vicinanza del BPM al target dell'obiettivo
-    target_bpm_ideale(Obiettivo, TargetBPM),
-    DiffBPM is abs(BPM - TargetBPM),
-    ScoreBPM is max(20.0, 100.0 - (DiffBPM * 1.5)),
+sicurezza_e_controindicazioni(BranoId, UtenteId) :-
+    \+ controindicazione_tachicardia(BranoId, UtenteId),
+    \+ controindicazione_iperstimolazione(BranoId, UtenteId).
 
-    % 2. Bonus se il genere musicale appartiene a quelli preferiti dall'utente
-    ( member(Genere, GeneriPreferiti) -> BonusPref = 20.0 ; BonusPref = 0.0 ),
+% Controindicazione 1: vietato proporre musica eccitante/veloce a chi ha battito tachicardico e stress critico
+controindicazione_tachicardia(BranoId, UtenteId) :-
+    utente(UtenteId, _, _, Battito, Stress, _, _),
+    Battito > 110.0,
+    Stress > 75.0,
+    brano(BranoId, _, _, _, BPM, _, Energia, _),
+    ( BPM > 100.0 ; Energia > 0.60 ).
 
-    % 3. Bonus per valenza positiva (aiuta la regolazione emotiva se stressato)
-    ScoreValenza is Valenza * 20.0,
+% Controindicazione 2: vietato stimolare utenti con fatica severa (rischio esaurimento)
+controindicazione_iperstimolazione(BranoId, UtenteId) :-
+    utente(UtenteId, _, Attivita, _, Stress, _, _),
+    Attivita == high_stress_work,
+    Stress > 80.0,
+    brano(BranoId, _, _, _, _, _, Energia, _),
+    Energia > 0.50.
 
-    % Calcolo pesato complessivo
-    PunteggioGrezzo is (ScoreBPM * 0.60) + ScoreValenza + BonusPref,
+% -------------------------------------------------------------------------
+% LIVELLO 1: PILASTRO DI COERENZA CIRCADIANA (RITMO BIOLOGICO)
+% -------------------------------------------------------------------------
+
+%! coerenza_circadiana(+BranoId, +UtenteId)
+% Regola i limiti di tempo e intensità in base al contesto temporale.
+
+coerenza_circadiana(BranoId, UtenteId) :-
+    utente(UtenteId, _, Attivita, _, _, Obiettivo, _),
+    ( (Attivita == sleep_preparation ; Obiettivo == sleep_induction)
+    -> brano(BranoId, _, _, _, BPM, _, Energia, _),
+       BPM =< 68.0,
+       Energia =< 0.30
+    ;  true
+    ).
+
+% -------------------------------------------------------------------------
+% LIVELLO 3: PREDICATI PRIMITIVI E SOGLIE FISIOLOGICHE
+% -------------------------------------------------------------------------
+
+battito_elevato(HR)   :- HR >= 100.0.
+stress_critico(S)     :- S >= 65.0.
+tempo_lento(BPM)      :- BPM =< 75.0.
+tempo_rapido(BPM)     :- BPM >= 120.0.
+energia_bassa(E)      :- E =< 0.35.
+energia_alta(E)       :- E >= 0.70.
+
+% -------------------------------------------------------------------------
+% LIVELLO 4: SCORING MULTI-ATTRIBUTO DEI BRANI AMMISSIBILI
+% -------------------------------------------------------------------------
+
+%! calcola_utilita(+BranoId, +UtenteId, -Punteggio)
+% Combina utilità biometrica, affinità emotiva e preferenza di genere.
+calcola_utilita(BranoId, UtenteId, PunteggioFinale) :-
+    utente(UtenteId, _, _, Battito, _, Obiettivo, GeneriPreferiti),
+    brano(BranoId, _, _, Genere, BPM, Valenza, _, Strumentale),
+
+    % Calcolo delta battito-tempo ideale
+    target_frequenza_ideale(Obiettivo, TargetBPM),
+    DeltaBPM is abs(BPM - TargetBPM),
+    ScoreFrequenza is max(20.0, 100.0 - (DeltaBPM * 1.5)),
+
+    % Punteggio preferenza utente (affinità culturale)
+    ( member(Genere, GeneriPreferiti) -> ScoreGenere = 25.0 ; ScoreGenere = 0.0 ),
+
+    % Modulazione valenza emotiva e purezza strumentale
+    ScoreAffettivo is (Valenza * 15.0) + (Strumentale * 10.0),
+
+    PunteggioGrezzo is (ScoreFrequenza * 0.50) + ScoreGenere + ScoreAffettivo,
     PunteggioFinale is min(100.0, PunteggioGrezzo).
 
-% Target ideale di battito/tempo associato a ciascun obiettivo clinico
-target_bpm_ideale(stress_downregulation, 65.0).
-target_bpm_ideale(cardio_peak_performance, 145.0).
-target_bpm_ideale(deep_focus_flow, 80.0).
-target_bpm_ideale(sleep_induction, 55.0).
-target_bpm_ideale(post_workout_recovery, 80.0).
-target_bpm_ideale(active_commute_energizer, 110.0).
-
-% -------------------------------------------------------------------------
-% 4. RICERCA DEL BRANO OTTIMALE
-% -------------------------------------------------------------------------
-
-%! brano_valido_per_utente(+BranoId, +UtenteId)
-% Il brano è valido se rispetta sia l'attività sia l'obiettivo di salute dell'utente.
-brano_valido_per_utente(BranoId, UtenteId) :-
-    utente(UtenteId, _, Attivita, _, _, Obiettivo, _),
-    ammissibile_per_attivita(BranoId, Attivita),
-    ammissibile_per_obiettivo(BranoId, Obiettivo).
+target_frequenza_ideale(stress_downregulation, 65.0).
+target_frequenza_ideale(cardio_peak_performance, 145.0).
+target_frequenza_ideale(deep_focus_flow, 80.0).
+target_frequenza_ideale(sleep_induction, 55.0).
+target_frequenza_ideale(post_workout_recovery, 80.0).
+target_frequenza_ideale(active_commute_energizer, 110.0).
 
 %! miglior_brano(+UtenteId, -MigliorBranoId, -Punteggio)
-% Seleziona il brano con il punteggio di utilità più alto tra tutti quelli validi.
+% Restituisce il brano a massima utilità tra tutti quelli che superano la meta-regola.
 miglior_brano(UtenteId, MigliorBranoId, PunteggioMax) :-
     findall(Punt-BId, (
-        brano_valido_per_utente(BId, UtenteId),
-        calcola_punteggio(BId, UtenteId, Punt)
-    ), ListaScelte),
-    ListaScelte \= [],
-    sort(1, @>=, ListaScelte, [PunteggioMax-MigliorBranoId|_]).
+        brano_raccomandabile(BId, UtenteId),
+        calcola_utilita(BId, UtenteId, Punt)
+    ), Candidati),
+    Candidati \= [],
+    sort(1, @>=, Candidati, [PunteggioMax-MigliorBranoId|_]).
 
 % -------------------------------------------------------------------------
-% 5. ENTRAINMENT MULTI-STADIO (ISO-PRINCIPLE)
+% MODULO D'ENTRAINMENT CLINICO: ALTSHULER'S ISO-PRINCIPLE
 % -------------------------------------------------------------------------
 
-%! sessione_iso_principle(+UtenteId, -SequenzaBrani)
-% Genera una sequenza a 3 gradini per calmare l'utente senza provocare rifiuto acustico:
-% 1. Entry: Brano con BPM simile al battito elevato attuale (+/- 15 BPM).
-% 2. Bridge: Brano a tempo intermedio (80-95 BPM) con energia contenuta.
-% 3. Target: Brano lento di rilassamento profondo (< 70 BPM).
-sessione_iso_principle(UtenteId, [stage(entry, Brano1), stage(bridge, Brano2), stage(target, Brano3)]) :-
+%! sessione_iso_principle(+UtenteId, -SequenzaStadi)
+% Regola di transizione dinamica per la regolazione del battito cardiaco:
+% 1. Stadio Entry:   matching con battito accelerato (+/- 18 BPM)
+% 2. Stadio Bridge:  decelerazione guidata a ritmo moderato (80-95 BPM)
+% 3. Stadio Target:  lock sulla frequenza di riposo (<= 68 BPM)
+sessione_iso_principle(UtenteId, [stage(entry, B1), stage(bridge, B2), stage(target, B3)]) :-
     utente(UtenteId, _, _, BattitoAttuale, _, _, _),
     
-    % Brano 1: aggancia lo stato eccitato
-    brano(Brano1, _, _, _, BPM1, _, _, _),
-    Diff1 is abs(BPM1 - BattitoAttuale),
-    Diff1 =< 18.0,
+    % Aggancio stato presente
+    brano(B1, _, _, _, BPM1, _, _, _),
+    abs(BPM1 - BattitoAttuale) =< 18.0,
 
-    % Brano 2: ponte di rallentamento
-    brano(Brano2, _, _, _, BPM2, _, Eng2, _),
+    % Ponte intermedio
+    brano(B2, _, _, _, BPM2, _, Eng2, _),
     BPM2 >= 80.0, BPM2 =< 95.0,
     Eng2 =< 0.50,
-    Brano2 \= Brano1,
+    B2 \= B1,
 
-    % Brano 3: target di rilassamento totale
-    brano(Brano3, _, _, _, BPM3, _, Eng3, _),
+    % Target parasimpatico
+    brano(B3, _, _, _, BPM3, _, Eng3, _),
     BPM3 =< 68.0,
     Eng3 =< 0.25,
-    Brano3 \= Brano1,
-    Brano3 \= Brano2,
+    B3 \= B1, B3 \= B2,
 
-    % Verifica monotonicità della discesa
+    % Invariante di monotonia decrescente del tempo
     BPM1 >= BPM2,
     BPM2 >= BPM3,
     !.
