@@ -1,68 +1,100 @@
 % =========================================================================
-% Interactive Advisor CLI: Smart Travel Advisor Console Interface
-% Part of: "Knowledge Base for a DSS (Tourism, Cultural Heritage & Education)"
+% Interactive Cognitive Advisor CLI
+% Part of: "KB for a DSS: Context-Aware Music Recommendation & Health-Routine Optimization"
 % =========================================================================
 
 :- module(interactive_advisor, [
     start_advisor/0
 ]).
 
-:- use_module('knowledge_base/load_kb').
-:- use_module('src/dss_core').
-:- use_module('src/dss_rules').
-:- use_module('src/scoring_model').
-:- use_module('src/explanation_engine').
+:- use_module('knowledge_base/load_kb.pl').
+:- use_module('src/dss_rules.pl').
+:- use_module('src/routine_generator.pl').
+:- use_module('src/scoring_model.pl').
+:- use_module('src/explanation_engine.pl').
+:- use_module('src/dss_core.pl').
 
+%! start_advisor
+% Entry point to the interactive terminal assistant.
 start_advisor :-
-    format('~n=============================================================================~n'),
-    format('    SMART TRAVEL ADVISOR - DECISION SUPPORT SYSTEM (DSS) IN PROLOG           ~n'),
-    format('    Tourism, Cultural Heritage & Education Optimization                      ~n'),
-    format('=============================================================================~n~n'),
+    format('~n========================================================================~n'),
+    format(' DSS CONTEXT-AWARE MUSIC & HEALTH-ROUTINE ADVISOR~n'),
+    format(' Real-Time Cognitive Decision Support System~n'),
+    format('========================================================================~n'),
+    format(' Choose an option:~n'),
+    format('  [1] Select Existing Smartwatch User Profile~n'),
+    format('  [2] Enter Live Ad-Hoc Biometrics (Simulate Smartwatch)~n'),
+    format('  [3] Exit~n'),
+    format(' Selection (1-3): '),
+    read_line_to_string(user_input, ChoiceStr),
+    process_main_choice(ChoiceStr).
+
+process_main_choice("1") :-
+    format('~n--- Available Smartwatch Profiles ---~n'),
+    forall(user_biometrics(Uid, Name, Act, HR, _, _, Stress, _, _, _, Goal, _),
+           format('  * ~w: ~w (Activity: ~w, HR: ~0f BPM, Stress: ~0f/100, Goal: ~w)~n', [Uid, Name, Act, HR, Stress, Goal])),
+    format('~n Enter User ID (e.g., user_sarah, user_alex, user_marco): '),
+    read_line_to_string(user_input, UserStr),
+    atom_string(UserId, UserStr),
+    ( user_biometrics(UserId, _, _, _, _, _, _, _, _, _, _, _)
+    -> prompt_profile_and_run(UserId)
+    ;  format('[!] Invalid User ID: ~w~n', [UserId]),
+       start_advisor
+    ).
+
+process_main_choice("2") :-
+    format('~n--- Live Smartwatch Simulation ---~n'),
+    format(' Select Activity (cardio_running, deep_focus_study, high_stress_work, sleep_preparation, active_commute): '),
+    read_line_to_string(user_input, ActStr),
+    atom_string(Activity, ActStr),
+    format(' Current Heart Rate in BPM (e.g., 115): '),
+    read_line_to_string(user_input, HRStr),
+    number_string(HR, HRStr),
+    format(' Current Stress Level [0-100] (e.g., 78): '),
+    read_line_to_string(user_input, StressStr),
+    number_string(Stress, StressStr),
+    format(' Target Routine (stress_downregulation, cardio_peak_performance, deep_focus_flow, sleep_induction, active_commute_energizer): '),
+    read_line_to_string(user_input, GoalStr),
+    atom_string(Goal, GoalStr),
     
-    prompt_read_number('Enter your total travel budget in EUR (e.g., 850.0): ', 850.0, Budget),
-    prompt_read_integer('Enter total number of travel days (e.g., 3, 5, 7): ', 3, Days),
-    prompt_read_atom('Enter travel season (spring, summer, autumn, winter, or any): ', spring, Season),
-    prompt_read_atom('Enter preferred pace (relaxed, moderate, intensive): ', moderate, Pace),
-    prompt_read_atom('Enter educational level (elementary, high_school, university_research, all): ', all, EduLevel),
-    prompt_read_topics('Enter educational topic(s) separated by commas (or "any"): ', [ancient_history, architecture], Topics),
-    prompt_read_integer('Enter minimum acceptable site educational score (1 - 10): ', 8, MinEduScore),
-    
-    UserPref = user_pref(Budget, Days, Season, Pace, Topics, EduLevel, MinEduScore),
-    format('~nPreferences received: ~w~n', [UserPref]),
-    query_advisor(UserPref).
+    evaluate_custom_biometrics(Activity, HR, Stress, Goal, RankedResults),
+    ( RankedResults = [Best|_]
+    -> Biometrics = user_biometrics(simulated_user, 'Simulated Smartwatch', Activity, HR, 60.0, 35.0, Stress, 6.0, afternoon, 40.0, Goal, [ambient, classical, lofi]),
+       print_recommendation_card(Best, Biometrics, Goal),
+       Best = ranked(_, TrackId, _),
+       explain_recommendation(TrackId, Biometrics, Goal)
+    ;  format('[!] No candidate tracks satisfied the physiological bounds for the specified parameters.~n')
+    ),
+    ask_restart.
 
-prompt_read_number(Prompt, Default, Value) :-
-    format('~w [default: ~w]: ', [Prompt, Default]),
-    read_line_to_string(user_input, Input),
-    ( Input == ""
-    ->  Value = Default
-    ;   ( number_string(Parsed, Input) -> Value is float(Parsed) ; Value = Default )
-    ).
+process_main_choice("3") :-
+    format('~nExiting Cognitive Advisor. Stay healthy and balanced!~n~n').
 
-prompt_read_integer(Prompt, Default, Value) :-
-    format('~w [default: ~w]: ', [Prompt, Default]),
-    read_line_to_string(user_input, Input),
-    ( Input == ""
-    ->  Value = Default
-    ;   ( number_string(Parsed, Input) -> Value = Parsed ; Value = Default )
-    ).
+process_main_choice(_) :-
+    format('[!] Invalid choice. Please try again.~n'),
+    start_advisor.
 
-prompt_read_atom(Prompt, Default, Value) :-
-    format('~w [default: ~w]: ', [Prompt, Default]),
-    read_line_to_string(user_input, Input),
-    ( Input == ""
-    ->  Value = Default
-    ;   atom_string(Value, Input)
-    ).
+prompt_profile_and_run(UserId) :-
+    format('~n Select MCDA Weighting Profile:~n'),
+    format('  [1] balanced (default)~n'),
+    format('  [2] health_priority (strongest biometric entrainment weight)~n'),
+    format('  [3] performance_priority (workout & arousal emphasis)~n'),
+    format('  [4] acoustic_first (mood & aesthetic focus)~n'),
+    format(' Profile choice (1-4): '),
+    read_line_to_string(user_input, ProfStr),
+    decode_profile(ProfStr, Profile),
+    query_smartwatch_advisor(UserId, Profile),
+    ask_restart.
 
-prompt_read_topics(Prompt, Default, Topics) :-
-    format('~w [default: ~w]: ', [Prompt, Default]),
-    read_line_to_string(user_input, Input),
-    ( Input == ""
-    ->  Topics = Default
-    ;   ( Input == "any"
-        ->  Topics = [any]
-        ;   split_string(Input, ",", " ", Parts),
-            maplist(atom_string, Topics, Parts)
-        )
+decode_profile("2", health_priority) :- !.
+decode_profile("3", performance_priority) :- !.
+decode_profile("4", acoustic_first) :- !.
+decode_profile(_, balanced).
+
+ask_restart :-
+    format('~n Would you like to run another consultation? (y/n): '),
+    read_line_to_string(user_input, Ans),
+    ( (Ans == "y" ; Ans == "Y")
+    -> start_advisor
+    ;  format('Exiting Cognitive Advisor. Goodbye!~n~n')
     ).

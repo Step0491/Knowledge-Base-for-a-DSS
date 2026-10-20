@@ -1,258 +1,175 @@
 % =========================================================================
-% DSS Rules Module: Financial, Temporal, and Educational Constraints
-% Part of: "Knowledge Base for a DSS (Tourism, Cultural Heritage & Education)"
+% DSS Rules Module: Biometric Matching, Physiological Safety, and Entrainment
+% Part of: "KB for a DSS: Context-Aware Music Recommendation & Health-Routine Optimization"
 % =========================================================================
 
 :- module(dss_rules, [
-    % Financial rules
-    destination_daily_cost/2,
-    budget_tier_destination/2,
-    total_itinerary_financials/5,
-    check_financial_constraint/3,
-    
-    % Temporal rules
-    pace_max_daily_hours/2,
-    pace_max_daily_sites/2,
-    destination_season_match/2,
-    schedule_days_feasible/3,
-    check_temporal_constraint/5,
-    
-    % Educational rules
-    site_satisfies_topic/2,
-    site_satisfies_level/2,
-    itinerary_topics_covered/2,
-    itinerary_avg_edu_score/2,
-    check_educational_constraint/5,
-    
-    % Combined validation
-    validate_itinerary_all_constraints/5
+    biometric_stress_tier/2,
+    heart_rate_delta/3,
+    check_cognitive_load_bounds/2,
+    check_workout_cadence_bounds/2,
+    check_routine_bounds/2,
+    check_genre_affinity/3,
+    iso_stage_matching/4,
+    validate_track_for_biometrics/3,
+    diagnose_track_failure/4
 ]).
 
 :- use_module('../knowledge_base/load_kb.pl').
 
 % -------------------------------------------------------------------------
-% 1. FINANCIAL CONSTRAINTS & RULES
+% 1. BIOMETRIC & PHYSIOLOGICAL CLASSIFICATIONS
 % -------------------------------------------------------------------------
 
-%! destination_daily_cost(+DestId, -DailyBaseCost)
-% Computes base daily cost of staying in a destination: accommodation + food + local transport.
-destination_daily_cost(DestId, DailyBaseCost) :-
-    destination(DestId, _, _, _, AccCost, FoodCost, TransCost, _),
-    DailyBaseCost is AccCost + FoodCost + TransCost.
+%! biometric_stress_tier(+StressScore, -Tier)
+% Classifies physiological stress level (0-100) derived from HRV and GSR:
+% - low_recovery:    0 - 35
+% - moderate_demand: 36 - 65
+% - acute_stress:    66 - 100
+biometric_stress_tier(Stress, low_recovery) :-
+    Stress =< 35.0, !.
+biometric_stress_tier(Stress, moderate_demand) :-
+    Stress > 35.0,
+    Stress =< 65.0, !.
+biometric_stress_tier(Stress, acute_stress) :-
+    Stress > 65.0.
 
-%! budget_tier_destination(+DestId, ?Tier)
-% Classifies a destination into budget tiers based on daily base cost:
-% - budget:   <= 85 EUR/day
-% - moderate: 85 - 130 EUR/day
-% - luxury:   > 130 EUR/day
-budget_tier_destination(DestId, budget) :-
-    destination_daily_cost(DestId, Cost),
-    Cost =< 85.0.
-
-budget_tier_destination(DestId, moderate) :-
-    destination_daily_cost(DestId, Cost),
-    Cost > 85.0,
-    Cost =< 130.0.
-
-budget_tier_destination(DestId, luxury) :-
-    destination_daily_cost(DestId, Cost),
-    Cost > 130.0.
-
-%! total_itinerary_financials(+CityDaysList, +SiteIdsList, +TransitPairsList, -TotalCost, -Breakdown)
-% CityDaysList: [city(rome, 3), city(florence, 2)]
-% SiteIdsList: [colosseum_and_roman_forum, vatican_city, ...]
-% TransitPairsList: [transit(rome, florence), ...]
-total_itinerary_financials(CityDaysList, SiteIdsList, TransitPairsList, TotalCost, Breakdown) :-
-    % 1. Base destination costs (Acc + Food + Local Transit)
-    maplist(city_stay_cost, CityDaysList, BaseCosts),
-    sum_list(BaseCosts, TotalBaseCost),
-    
-    % 2. Heritage Site admission fees
-    maplist(site_admission_cost, SiteIdsList, SiteFees),
-    sum_list(SiteFees, TotalAdmissionFees),
-    
-    % 3. Inter-city transit tickets
-    maplist(transit_ticket_cost, TransitPairsList, TransitCosts),
-    sum_list(TransitCosts, TotalTransitCost),
-    
-    TotalCost is TotalBaseCost + TotalAdmissionFees + TotalTransitCost,
-    Breakdown = cost_breakdown(TotalBaseCost, TotalAdmissionFees, TotalTransitCost, TotalCost).
-
-city_stay_cost(city(DestId, Days), Cost) :-
-    destination_daily_cost(DestId, DailyBase),
-    Cost is DailyBase * Days.
-
-site_admission_cost(SiteId, Fee) :-
-    heritage_site(SiteId, _, _, _, _, _, _, _, _, Fee, _).
-
-transit_ticket_cost(transit(Orig, Dest), Cost) :-
-    intercity_transit(Orig, Dest, _, Cost, _).
-
-%! check_financial_constraint(+TotalCost, +MaxBudget, -Margin)
-% Verifies that total cost is strictly within user max budget.
-check_financial_constraint(TotalCost, MaxBudget, Margin) :-
-    TotalCost =< MaxBudget,
-    Margin is MaxBudget - TotalCost.
+%! heart_rate_delta(+TrackBPM, +UserHeartRate, -DeltaBPM)
+% Absolute difference between musical tempo and user heart rate.
+heart_rate_delta(TrackBPM, UserHR, Delta) :-
+    Delta is abs(TrackBPM - UserHR).
 
 % -------------------------------------------------------------------------
-% 2. TEMPORAL CONSTRAINTS & RULES
+% 2. COGNITIVE & ACTIVITY-SPECIFIC BOUNDS
 % -------------------------------------------------------------------------
 
-%! pace_max_daily_hours(?Pace, ?MaxHours)
-% Defines maximum recommended active heritage visit hours per day by pace.
-pace_max_daily_hours(relaxed, 4.5).
-pace_max_daily_hours(moderate, 6.5).
-pace_max_daily_hours(intensive, 8.5).
+%! check_cognitive_load_bounds(+TrackId, +Activity)
+% For deep study / flowstate tasks: enforces strict absence of vocal lyrics (instrumentalness >= 0.70)
+% and sound pressure ceiling (loudness <= -13.0 dB) to eliminate auditory distraction.
+check_cognitive_load_bounds(TrackId, deep_focus_study) :-
+    !,
+    track_acoustic(TrackId, _, Instrumentalness, LoudnessDb),
+    Instrumentalness >= 0.70,
+    LoudnessDb =< -13.0.
+check_cognitive_load_bounds(_, _).
 
-%! pace_max_daily_sites(?Pace, ?MaxSites)
-% Defines maximum recommended sites visited per day by pace.
-pace_max_daily_sites(relaxed, 2).
-pace_max_daily_sites(moderate, 3).
-pace_max_daily_sites(intensive, 4).
+%! check_workout_cadence_bounds(+TrackId, +Activity)
+% For cardio and running: requires tempo synchronization (BPM >= 120.0) and high energy (>= 0.70).
+check_workout_cadence_bounds(TrackId, cardio_running) :-
+    !,
+    track(TrackId, _, _, _, BPM, _, Energy, _, _, _, _, _, _),
+    BPM >= 120.0,
+    Energy >= 0.70.
+check_workout_cadence_bounds(_, _).
 
-%! destination_season_match(+DestId, +TravelSeason)
-% Verifies if the travel season is among the destination's recommended seasons.
-destination_season_match(DestId, TravelSeason) :-
-    destination(DestId, _, _, _, _, _, _, BestSeasons),
-    ( TravelSeason == any
-    ; member(TravelSeason, BestSeasons)
+% -------------------------------------------------------------------------
+% 3. ROUTINE PROTOCOL BOUNDS
+% -------------------------------------------------------------------------
+
+%! check_routine_bounds(+TrackId, +RoutineId)
+% Verifies whether a song falls within the physiological parameters of the health routine.
+check_routine_bounds(TrackId, RoutineId) :-
+    health_routine(RoutineId, _, _, MinBPM, MaxBPM, MinVal, MaxVal, MinEng, MaxEng, MinInst, MaxLoud, _, _, _, ReqAttrs, _),
+    track(TrackId, _, _, _, BPM, Valence, Energy, _, _, Inst, Loudness, _, Attrs),
+    BPM >= MinBPM, BPM =< MaxBPM,
+    Valence >= MinVal, Valence =< MaxVal,
+    Energy >= MinEng, Energy =< MaxEng,
+    Inst >= MinInst,
+    Loudness =< MaxLoud,
+    % Check if at least one required attribute is present or no specific attrs required
+    ( ReqAttrs == []
+    -> true
+    ;  member(Attr, ReqAttrs),
+       member(Attr, Attrs)
     ).
 
-%! schedule_days_feasible(+DaysList, +Pace, +DaySitesAllocation)
-% Verifies that for each day, the allocated sites do not exceed daily pace hours.
-% DaySitesAllocation: [day(1, [site1, site2]), day(2, [site3]), ...]
-schedule_days_feasible([], _, []).
-schedule_days_feasible([day(DayNum, Sites)|RestDays], Pace, [report(DayNum, TotalHours, SiteCount)|RestReports]) :-
-    pace_max_daily_hours(Pace, MaxHours),
-    pace_max_daily_sites(Pace, MaxSites),
-    length(Sites, SiteCount),
-    SiteCount =< MaxSites,
-    maplist(site_duration, Sites, Durations),
-    sum_list(Durations, TotalHours),
-    TotalHours =< MaxHours,
-    schedule_days_feasible(RestDays, Pace, RestReports).
-
-site_duration(SiteId, Duration) :-
-    heritage_site(SiteId, _, _, _, _, _, _, _, Duration, _, _).
-
-%! check_temporal_constraint(+CityDaysList, +RequestedDays, +Season, +Pace, +DailyAllocations)
-check_temporal_constraint(CityDaysList, RequestedDays, Season, Pace, DailyAllocations) :-
-    % Check total days match
-    findall(Days, member(city(_, Days), CityDaysList), DaysCounts),
-    sum_list(DaysCounts, TotalDays),
-    TotalDays =:= RequestedDays,
-    
-    % Check season validity for all visited destinations
-    forall(member(city(DestId, _), CityDaysList), destination_season_match(DestId, Season)),
-    
-    % Check daily pace feasibility
-    schedule_days_feasible(DailyAllocations, Pace, _).
-
 % -------------------------------------------------------------------------
-% 3. EDUCATIONAL CONSTRAINTS & RULES
+% 4. USER GENRE AFFINITY
 % -------------------------------------------------------------------------
 
-%! site_satisfies_topic(+SiteId, +DesiredTopic)
-% Checks whether a heritage site covers the desired educational topic.
-site_satisfies_topic(SiteId, DesiredTopic) :-
-    heritage_site(SiteId, _, _, _, _, _, Topics, _, _, _, _),
-    ( DesiredTopic == any
-    ; member(DesiredTopic, Topics)
-    ; topic_subsumes(DesiredTopic, Topics)
-    ).
-
-% Educational topic subsumption / semantic hierarchy
-topic_subsumes(ancient_history, Topics) :-
-    member(T, Topics), member(T, [ancient_rome, classical_antiquity, archaeology, classical_greek_philosophy, roman_law_and_statecraft]).
-topic_subsumes(art_history, Topics) :-
-    member(T, Topics), member(T, [renaissance_humanism, baroque_art, fine_arts_curation, modernist_architecture, byzantine_mosaic_art, art_nouveau]).
-topic_subsumes(architecture, Topics) :-
-    member(T, Topics), member(T, [classical_architecture, renaissance_architecture, baroque_architecture, gothic_architecture, modernist_architecture, mudejar_architecture]).
-topic_subsumes(engineering, Topics) :-
-    member(T, Topics), member(T, [civil_engineering, dome_engineering, hydraulic_engineering, biomimetic_structural_engineering, iron_bridge_engineering]).
-topic_subsumes(urban_planning, Topics) :-
-    member(T, Topics), member(T, [enlightenment_urbanism, ringstrasse_urban_planning, water_management, graeco_roman_street_grids]).
-
-%! site_satisfies_level(+SiteId, +UserEduLevel)
-% Verifies if the target education level matches the user.
-% Levels: elementary, high_school, university_research, all.
-site_satisfies_level(_, all) :- !.
-site_satisfies_level(SiteId, UserEduLevel) :-
-    heritage_site(SiteId, _, _, _, _, _, _, TargetLevel, _, _, _),
-    edu_level_compatible(UserEduLevel, TargetLevel).
-
-edu_level_compatible(_, all) :- !.
-edu_level_compatible(elementary, elementary) :- !.
-edu_level_compatible(high_school, high_school) :- !.
-edu_level_compatible(high_school, elementary) :- !.
-edu_level_compatible(university_research, _) :- !. % University researchers can visit any level, prioritizing academic depth.
-
-%! itinerary_topics_covered(+SiteIdsList, -AllCoveredTopics)
-itinerary_topics_covered(SiteIdsList, UniqueCoveredTopics) :-
-    findall(T, (
-        member(SiteId, SiteIdsList),
-        heritage_site(SiteId, _, _, _, _, _, Topics, _, _, _, _),
-        member(T, Topics)
-    ), AllTopicsList),
-    sort(AllTopicsList, UniqueCoveredTopics).
-
-%! itinerary_avg_edu_score(+SiteIdsList, -AvgScore)
-itinerary_avg_edu_score([], 0.0) :- !.
-itinerary_avg_edu_score(SiteIdsList, AvgScore) :-
-    findall(Score, (
-        member(SiteId, SiteIdsList),
-        heritage_site(SiteId, _, _, _, _, _, _, _, _, _, Score)
-    ), ScoresList),
-    sum_list(ScoresList, Sum),
-    length(ScoresList, N),
-    N > 0,
-    AvgScore is Sum / N.
-
-%! check_educational_constraint(+SiteIdsList, +DesiredTopicsList, +EduLevel, +MinAvgEduScore, -Report)
-check_educational_constraint(SiteIdsList, DesiredTopicsList, EduLevel, MinAvgEduScore, Report) :-
-    SiteIdsList \= [],
-    % 1. Check education level compatibility for each site
-    forall(member(SiteId, SiteIdsList), site_satisfies_level(SiteId, EduLevel)),
-    
-    % 2. Check topic satisfaction
-    ( DesiredTopicsList == [] ; DesiredTopicsList == [any]
-    ->  TopicCoverage = 1.0
-    ;   findall(Req, (
-            member(Req, DesiredTopicsList),
-            member(SiteId, SiteIdsList),
-            site_satisfies_topic(SiteId, Req)
-        ), MatchedReqsRaw),
-        sort(MatchedReqsRaw, MatchedReqs),
-        length(MatchedReqs, MatchedCount),
-        length(DesiredTopicsList, TotalReqCount),
-        MatchedCount > 0, % At least one required topic matched, or high coverage
-        TopicCoverage is MatchedCount / TotalReqCount,
-        TopicCoverage >= 0.50 % Must satisfy at least 50% of multiple requested topics
-    ),
-    
-    % 3. Check minimum average educational quality score
-    itinerary_avg_edu_score(SiteIdsList, AvgScore),
-    AvgScore >= MinAvgEduScore,
-    
-    itinerary_topics_covered(SiteIdsList, CoveredTopics),
-    Report = edu_report(TopicCoverage, AvgScore, CoveredTopics).
+%! check_genre_affinity(+TrackId, +PreferredGenres, -AffinityMultiplier)
+% Calculates preference weighting: 1.25 for preferred genre, 1.0 for neutral genre.
+check_genre_affinity(TrackId, PreferredGenres, 1.25) :-
+    track(TrackId, _, _, Genre, _, _, _, _, _, _, _, _, _),
+    member(Genre, PreferredGenres), !.
+check_genre_affinity(_, _, 1.0).
 
 % -------------------------------------------------------------------------
-% 4. UNIFIED CONSTRAINT VALIDATOR
+% 5. ISO-PRINCIPLE ENTRAINMENT STAGING
 % -------------------------------------------------------------------------
 
-validate_itinerary_all_constraints(Itinerary, UserPreferences, FinReport, TempReport, EduReport) :-
-    Itinerary = itinerary(CityDays, Sites, Transits, DailyAllocations),
-    UserPreferences = user_pref(MaxBudget, Days, Season, Pace, DesiredTopics, EduLevel, MinEduScore),
+%! iso_stage_matching(+Stage, +UserHR, +TargetHR, +TrackId)
+% Implements Altshuler's Musical Iso-Principle for biofeedback entrainment:
+% - stage(entry): match current elevated heart rate (within +/- 15 BPM) to validate affective state.
+% - stage(transition): mid-point bridge between current HR and target HR.
+% - stage(target): settles at target recovery HR (+/- 10 BPM) and low energy (< 0.35).
+iso_stage_matching(entry, UserHR, _, TrackId) :-
+    track_features(TrackId, BPM, _, _),
+    Delta is abs(BPM - UserHR),
+    Delta =< 18.0.
+
+iso_stage_matching(transition, UserHR, TargetHR, TrackId) :-
+    MidBPM is (UserHR + TargetHR) / 2.0,
+    track_features(TrackId, BPM, _, Energy),
+    Delta is abs(BPM - MidBPM),
+    Delta =< 15.0,
+    Energy =< 0.60.
+
+iso_stage_matching(target, _, TargetHR, TrackId) :-
+    track_features(TrackId, BPM, _, Energy),
+    Delta is abs(BPM - TargetHR),
+    Delta =< 12.0,
+    Energy =< 0.35.
+
+% -------------------------------------------------------------------------
+% 6. UNIFIED CANDIDATE VALIDATION
+% -------------------------------------------------------------------------
+
+%! validate_track_for_biometrics(+TrackId, +Biometrics, +RoutineId)
+% Evaluates all strict constraints for a candidate track given user biometrics and target routine.
+validate_track_for_biometrics(TrackId, Biometrics, RoutineId) :-
+    Biometrics = user_biometrics(_, _, Activity, _HR, _, _, _Stress, _, _, _, _, _),
+    check_cognitive_load_bounds(TrackId, Activity),
+    check_workout_cadence_bounds(TrackId, Activity),
+    check_routine_bounds(TrackId, RoutineId).
+
+%! diagnose_track_failure(+TrackId, +Biometrics, +RoutineId, -Reasons)
+% Explains why a track was discarded by constraint satisfaction.
+diagnose_track_failure(TrackId, Biometrics, RoutineId, Reasons) :-
+    Biometrics = user_biometrics(_, _, Activity, _HR, _, _, _Stress, _, _, _, _, _),
+    health_routine(RoutineId, _, _, MinBPM, MaxBPM, MinVal, MaxVal, MinEng, MaxEng, MinInst, MaxLoud, _, _, _, _, _),
+    track(TrackId, _, _, _, BPM, Valence, Energy, _, _, Inst, Loudness, _, _),
     
-    % 1. Financial check
-    total_itinerary_financials(CityDays, Sites, Transits, TotalCost, FinBreakdown),
-    check_financial_constraint(TotalCost, MaxBudget, Margin),
-    FinReport = financial_ok(TotalCost, MaxBudget, Margin, FinBreakdown),
-    
-    % 2. Temporal check
-    check_temporal_constraint(CityDays, Days, Season, Pace, DailyAllocations),
-    TempReport = temporal_ok(Days, Season, Pace),
-    
-    % 3. Educational check
-    check_educational_constraint(Sites, DesiredTopics, EduLevel, MinEduScore, EduReport).
+    findall(Reason, (
+        ( Activity == deep_focus_study, Inst < 0.70
+        -> Reason = 'Cognitive load violation: Track has vocal lyrics (instrumentalness < 0.70)'
+        ; fail )
+        ;
+        ( Activity == deep_focus_study, Loudness > -13.0
+        -> Reason = 'Acoustic intrusion: Loudness exceeds focus ceiling (-13.0 dB)'
+        ; fail )
+        ;
+        ( Activity == cardio_running, BPM < 120.0
+        -> Reason = 'Cadence mismatch: BPM is below aerobic cadence threshold (120 BPM)'
+        ; fail )
+        ;
+        ( BPM < MinBPM ; BPM > MaxBPM
+        -> Reason = 'BPM out of routine physiological window'
+        ; fail )
+        ;
+        ( Valence < MinVal ; Valence > MaxVal
+        -> Reason = 'Valence does not match affective mood protocol'
+        ; fail )
+        ;
+        ( Energy < MinEng ; Energy > MaxEng
+        -> Reason = 'Energy level incompatible with target autonomic arousal'
+        ; fail )
+        ;
+        ( Inst < MinInst
+        -> Reason = 'Instrumental purity below routine minimum'
+        ; fail )
+        ;
+        ( Loudness > MaxLoud
+        -> Reason = 'Track exceeds maximum decibel loudness limit'
+        ; fail )
+    ), Reasons).

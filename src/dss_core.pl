@@ -1,47 +1,75 @@
 % =========================================================================
-% DSS Core Module: Smart Travel Advisor Façade
-% Part of: "Knowledge Base for a DSS (Tourism, Cultural Heritage & Education)"
+% DSS Core Module: Music Recommendation & Health Routine Façade
+% Part of: "KB for a DSS: Context-Aware Music Recommendation & Health-Routine Optimization"
 % =========================================================================
 
 :- module(dss_core, [
-    recommend_itineraries/2,
-    recommend_best_itinerary/2,
-    query_advisor/1,
-    query_advisor/7
+    recommend_for_user/2,
+    recommend_for_user/3,
+    recommend_iso_session_for_user/3,
+    query_smartwatch_advisor/1,
+    query_smartwatch_advisor/2,
+    evaluate_custom_biometrics/5
 ]).
 
 :- use_module('../knowledge_base/load_kb.pl').
 :- use_module(dss_rules).
+:- use_module(routine_generator).
 :- use_module(scoring_model).
-:- use_module(itinerary_generator).
 :- use_module(explanation_engine).
 
-%! recommend_itineraries(+Preferences, -RankedResults)
-% High-level inference entry point.
-recommend_itineraries(Preferences, RankedResults) :-
-    generate_candidate_itineraries(Preferences, Candidates),
-    rank_itineraries(Candidates, Preferences, RankedResults).
+%! recommend_for_user(+UserId, -BestRanked)
+recommend_for_user(UserId, BestRanked) :-
+    recommend_for_user(UserId, balanced, BestRanked).
 
-%! recommend_best_itinerary(+Preferences, -BestItinerary)
-recommend_best_itinerary(Preferences, Best) :-
-    recommend_itineraries(Preferences, [Best|_]).
-
-%! query_advisor(+MaxBudget, +Days, +Season, +Pace, +DesiredTopics, +EduLevel, +MinEduScore)
-% Convenience query wrapper that computes and prints the recommendation or diagnostics.
-query_advisor(MaxBudget, Days, Season, Pace, DesiredTopics, EduLevel, MinEduScore) :-
-    UserPref = user_pref(MaxBudget, Days, Season, Pace, DesiredTopics, EduLevel, MinEduScore),
-    query_advisor(UserPref).
-
-%! query_advisor(+UserPref)
-query_advisor(UserPref) :-
-    format('~n[*] Searching for optimal travel itineraries satisfying all constraints...~n'),
-    recommend_itineraries(UserPref, Results),
-    ( Results = [Best|_]
-    ->  length(Results, TotalFound),
-        format('[+] Found ~w candidate itineraries meeting all constraints.~n', [TotalFound]),
-        print_itinerary_card(Best)
-    ;   format('[!] No itineraries found matching all constraints.~n'),
-        diagnose_failure(UserPref, Diagnostics),
-        format('--- Failure Diagnosis & Bottlenecks ---~n'),
-        forall(member(Diag, Diagnostics), format(' * ~w~n', [Diag]))
+%! recommend_for_user(+UserId, +Profile, -BestRanked)
+recommend_for_user(UserId, Profile, BestRanked) :-
+    user_biometrics(UserId, Name, Act, HR, RHR, HRV, Stress, GSR, Phase, Fat, Goal, Prefs),
+    Biometrics = user_biometrics(UserId, Name, Act, HR, RHR, HRV, Stress, GSR, Phase, Fat, Goal, Prefs),
+    generate_candidate_tracks(Biometrics, Goal, Candidates),
+    ( Candidates \= []
+    -> rank_candidate_tracks(Candidates, Biometrics, Goal, Profile, [BestRanked|_])
+    ;  fail
     ).
+
+%! recommend_iso_session_for_user(+UserId, -SessionTracks, -SessionStats)
+recommend_iso_session_for_user(UserId, SessionTracks, SessionStats) :-
+    user_biometrics(UserId, Name, Act, HR, RHR, HRV, Stress, GSR, Phase, Fat, Goal, Prefs),
+    Biometrics = user_biometrics(UserId, Name, Act, HR, RHR, HRV, Stress, GSR, Phase, Fat, Goal, Prefs),
+    generate_iso_routine_session(Biometrics, Goal, SessionTracks, SessionStats).
+
+%! query_smartwatch_advisor(+UserId)
+query_smartwatch_advisor(UserId) :-
+    query_smartwatch_advisor(UserId, balanced).
+
+%! query_smartwatch_advisor(+UserId, +Profile)
+query_smartwatch_advisor(UserId, Profile) :-
+    user_biometrics(UserId, Name, Act, HR, RHR, HRV, Stress, GSR, Phase, Fat, Goal, Prefs),
+    Biometrics = user_biometrics(UserId, Name, Act, HR, RHR, HRV, Stress, GSR, Phase, Fat, Goal, Prefs),
+    format('~n[*] Querying DSS Cognitive Assistant for User: ~w (~w)...~n', [Name, UserId]),
+    generate_candidate_tracks(Biometrics, Goal, Candidates),
+    ( Candidates \= []
+    -> length(Candidates, Count),
+       format('[+] Evaluated ~w candidate tracks satisfying all clinical and acoustic bounds.~n', [Count]),
+       rank_candidate_tracks(Candidates, Biometrics, Goal, Profile, [BestRanked|Rest]),
+       print_recommendation_card(BestRanked, Biometrics, Goal),
+       BestRanked = ranked(_, BestTrackId, _),
+       explain_recommendation(BestTrackId, Biometrics, Goal),
+       % If Iso routine applies, also demonstrate multi-track entrainment
+       ( health_routine(Goal, _, _, _, _, _, _, _, _, _, _, _, _, _, _, true)
+       -> ( generate_iso_routine_session(Biometrics, Goal, IsoTracks, IsoStats)
+          -> print_iso_session_card(IsoTracks, IsoStats, Biometrics)
+          ;  true )
+       ; true )
+    ;  format('[!] No tracks found satisfying all strict constraints for goal: ~w.~n', [Goal]),
+       diagnose_routine_failure(Biometrics, Goal, Diagnostics),
+       format('--- Constraint Violation Diagnostics ---~n'),
+       forall(member(track_diag(T, Reasons), Diagnostics),
+              format(' * Track ~w rejected: ~w~n', [T, Reasons]))
+    ).
+
+%! evaluate_custom_biometrics(+Activity, +HR, +Stress, +Goal, -RankedResults)
+evaluate_custom_biometrics(Activity, HR, Stress, Goal, RankedResults) :-
+    Biometrics = user_biometrics(temp_user, 'Ad-hoc User', Activity, HR, 60.0, 40.0, Stress, 5.0, afternoon, 30.0, Goal, [ambient, classical, lofi, electronic]),
+    generate_candidate_tracks(Biometrics, Goal, Candidates),
+    rank_candidate_tracks(Candidates, Biometrics, Goal, balanced, RankedResults).

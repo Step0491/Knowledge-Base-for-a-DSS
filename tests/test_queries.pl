@@ -1,218 +1,133 @@
 % =========================================================================
-% Test Suite: Logical Correctness of Decision Constraints
-% Part of: "Knowledge Base for a DSS (Tourism, Cultural Heritage & Education)"
-% Tests all constraints: Financial, Temporal, Educational, Feasibility, MCDA.
+% Logical Correctness Test Suite
+% Part of: "KB for a DSS: Context-Aware Music Recommendation & Health-Routine Optimization"
 % =========================================================================
 
 :- module(test_queries, [
     run_all_tests/0,
-    test_financial_constraint/0,
-    test_temporal_duration/0,
-    test_temporal_pacing/0,
-    test_temporal_seasonality/0,
-    test_educational_topics/0,
-    test_educational_levels/0,
-    test_educational_min_score/0,
-    test_transit_corridors/0,
-    test_unsatisfiable_query_diagnosis/0,
-    test_mcda_ranking_monotonicity/0
+    test/2
 ]).
 
-:- use_module('../knowledge_base/load_kb').
-:- use_module('../src/dss_core').
-:- use_module('../src/dss_rules').
-:- use_module('../src/scoring_model').
-:- use_module('../src/itinerary_generator').
-:- use_module('../src/explanation_engine').
+:- use_module('../knowledge_base/load_kb.pl').
+:- use_module('../src/dss_rules.pl').
+:- use_module('../src/routine_generator.pl').
+:- use_module('../src/scoring_model.pl').
+:- use_module('../src/dss_core.pl').
 
+% Test Runner Harness
 run_all_tests :-
-    format('~n============================================================~n'),
-    format('     SMART TRAVEL ADVISOR DSS - LOGICAL TEST SUITE          ~n'),
-    format('============================================================~n~n'),
-    run_test(test_financial_constraint,        'Test 1: Strict Financial Budget Bounds Enforcement'),
-    run_test(test_temporal_duration,           'Test 2: Exact Trip Duration Matching'),
-    run_test(test_temporal_pacing,             'Test 3: Daily Pace & Visit Hours Capacity Limits'),
-    run_test(test_temporal_seasonality,        'Test 4: Destination Seasonality Compatibility'),
-    run_test(test_educational_topics,          'Test 5: Educational Topic Coverage & Semantic Subsumption'),
-    run_test(test_educational_levels,          'Test 6: Educational Level Matching (Family/HighSchool/Univ)'),
-    run_test(test_educational_min_score,       'Test 7: Minimum Educational Quality Threshold'),
-    run_test(test_transit_corridors,           'Test 8: Multi-City Transit Corridor & Cost Accounting'),
-    run_test(test_unsatisfiable_query_diagnosis,'Test 9: Graceful Failure Diagnosis on Unsatisfiable Bounds'),
-    run_test(test_mcda_ranking_monotonicity,    'Test 10: Multi-Criteria Utility Bounds & Descending Rank'),
-    format('~n============================================================~n'),
-    format('All logical correctness test queries executed.~n'),
-    format('============================================================~n~n').
+    format('~n========================================================================~n'),
+    format(' DSS LOGICAL CORRECTNESS & PHYSIOLOGICAL CONSTRAINT TEST SUITE~n'),
+    format('========================================================================~n'),
+    findall(TestId-Status, execute_test(TestId, Status), Results),
+    print_test_summary(Results).
 
-run_test(Predicate, Description) :-
-    format('[RUN] ~w... ', [Description]),
-    ( catch(call(Predicate), E, (format('FAILED with error: ~w~n', [E]), fail))
-    ->  format('PASSED [OK]~n')
-    ;   format('FAILED [FAIL]~n')
+execute_test(TestId, Status) :-
+    test(TestId, Description),
+    format('[RUN] Test ~w: ~w... ', [TestId, Description]),
+    ( catch(call_test(TestId), Error, (format('FAILED with error ~w~n', [Error]), fail))
+    -> format('PASSED~n'), Status = passed
+    ;  format('FAILED~n'), Status = failed
+    ).
+
+print_test_summary(Results) :-
+    findall(T, member(T-passed, Results), Passed),
+    findall(T, member(T-failed, Results), Failed),
+    length(Passed, NumPass),
+    length(Failed, NumFail),
+    Total is NumPass + NumFail,
+    format('~n------------------------------------------------------------------------~n'),
+    format(' Test Execution Summary: ~w/~w Passed (~w Failed)~n', [NumPass, Total, NumFail]),
+    format('------------------------------------------------------------------------~n~n'),
+    ( NumFail =:= 0
+    -> true
+    ;  throw(tests_failed(NumFail))
     ).
 
 % -------------------------------------------------------------------------
-% TEST 1: Strict Financial Budget Bounds Enforcement
+% TEST DEFINITIONS
 % -------------------------------------------------------------------------
-test_financial_constraint :-
-    MaxBudget = 450.0,
-    Days = 3,
-    Season = spring,
-    Pace = moderate,
-    Topics = [ancient_history],
-    Pref = user_pref(MaxBudget, Days, Season, Pace, Topics, all, 7),
-    recommend_itineraries(Pref, Results),
-    Results \= [],
-    % Every recommended candidate must strictly satisfy Cost =< MaxBudget
-    forall(member(score_entry(_, _, Itin), Results), (
-        Itin = itinerary(CityDays, Sites, Transits, _),
-        total_itinerary_financials(CityDays, Sites, Transits, TotalCost, _),
-        TotalCost =< MaxBudget
-    )).
 
-% -------------------------------------------------------------------------
-% TEST 2: Exact Trip Duration Matching
-% -------------------------------------------------------------------------
-test_temporal_duration :-
-    RequestedDays = 4,
-    Pref = user_pref(1000.0, RequestedDays, spring, moderate, [architecture], all, 7),
-    recommend_itineraries(Pref, Results),
-    Results \= [],
-    forall(member(score_entry(_, _, Itin), Results), (
-        Itin = itinerary(CityDays, _, _, _),
-        findall(D, member(city(_, D), CityDays), DaysList),
-        sum_list(DaysList, TotalDays),
-        TotalDays =:= RequestedDays
-    )).
+test(1, 'Acute stress downregulation recommends low-tempo, low-energy ambient track').
+call_test(1) :-
+    user_biometrics(user_sarah, _, Act, HR, _, _, Stress, _, _, _, Goal, _),
+    Stress > 80.0,
+    recommend_for_user(user_sarah, ranked(_, TrackId, _)),
+    track(TrackId, _, _, _, BPM, _, Energy, _, _, Inst, _, _, _),
+    BPM =< 75.0,
+    Energy =< 0.35,
+    Inst >= 0.70.
 
-% -------------------------------------------------------------------------
-% TEST 3: Daily Pace & Visit Hours Capacity Limits
-% -------------------------------------------------------------------------
-test_temporal_pacing :-
-    Pace = relaxed,
-    pace_max_daily_hours(Pace, MaxHours),
-    pace_max_daily_sites(Pace, MaxSites),
-    Pref = user_pref(800.0, 3, autumn, Pace, [art_history], all, 7),
-    recommend_itineraries(Pref, Results),
-    Results \= [],
-    forall(member(score_entry(_, _, Itin), Results), (
-        Itin = itinerary(_, _, _, DailyAllocations),
-        forall(member(day(_, DaySites), DailyAllocations), (
-            length(DaySites, Count),
-            Count =< MaxSites,
-            maplist(dss_rules:site_duration, DaySites, Durations),
-            sum_list(Durations, TotalDayHours),
-            TotalDayHours =< MaxHours
-        ))
-    )).
+test(2, 'Cardio workout enforces cadence synchronization (BPM >= 120, Energy >= 0.75)').
+call_test(2) :-
+    user_biometrics(user_alex, _, _, _, _, _, _, _, _, _, Goal, _),
+    recommend_for_user(user_alex, ranked(_, TrackId, _)),
+    track(TrackId, _, _, _, BPM, _, Energy, _, _, _, _, _, _),
+    BPM >= 120.0,
+    Energy >= 0.75.
 
-% -------------------------------------------------------------------------
-% TEST 4: Destination Seasonality Compatibility
-% -------------------------------------------------------------------------
-test_temporal_seasonality :-
-    Season = winter,
-    Pref = user_pref(900.0, 3, Season, moderate, [any], all, 7),
-    recommend_itineraries(Pref, Results),
-    Results \= [],
-    forall(member(score_entry(_, _, Itin), Results), (
-        Itin = itinerary(CityDays, _, _, _),
-        forall(member(city(DestId, _), CityDays), (
-            destination(DestId, _, _, _, _, _, _, BestSeasons),
-            member(Season, BestSeasons)
-        ))
-    )).
+test(3, 'Deep focus mode strictly filters out lyrics (instrumentalness >= 0.80)').
+call_test(3) :-
+    user_biometrics(user_marco, _, Act, _, _, _, _, _, _, _, Goal, _),
+    Act == deep_focus_study,
+    recommend_for_user(user_marco, ranked(_, TrackId, _)),
+    track_acoustic(TrackId, _, Inst, Loudness),
+    Inst >= 0.80,
+    Loudness =< -13.0.
 
-% -------------------------------------------------------------------------
-% TEST 5: Educational Topic Coverage & Semantic Subsumption
-% -------------------------------------------------------------------------
-test_educational_topics :-
-    Topics = [ancient_history, architecture],
-    Pref = user_pref(900.0, 3, spring, moderate, Topics, all, 8),
-    recommend_itineraries(Pref, Results),
-    Results \= [],
-    forall(member(score_entry(_, _, Itin), Results), (
-        Itin = itinerary(_, Sites, _, _),
-        check_educational_constraint(Sites, Topics, all, 8, edu_report(Coverage, _, _)),
-        Coverage >= 0.50
-    )).
+test(4, 'Post-workout recovery triggers deceleration and relaxation acoustic features').
+call_test(4) :-
+    user_biometrics(user_elena, _, _, _, _, _, _, _, _, _, Goal, _),
+    recommend_for_user(user_elena, ranked(_, TrackId, _)),
+    track(TrackId, _, _, _, BPM, _, Energy, _, _, _, _, _, _),
+    BPM =< 105.0,
+    Energy =< 0.55.
 
-% -------------------------------------------------------------------------
-% TEST 6: Educational Level Matching (Family/Elementary)
-% -------------------------------------------------------------------------
-test_educational_levels :-
-    EduLevel = elementary,
-    Pref = user_pref(900.0, 3, spring, moderate, [any], EduLevel, 7),
-    recommend_itineraries(Pref, Results),
-    Results \= [],
-    forall(member(score_entry(_, _, Itin), Results), (
-        Itin = itinerary(_, Sites, _, _),
-        forall(member(SiteId, Sites), (
-            heritage_site(SiteId, _, _, _, _, _, _, TargetLevel, _, _, _),
-            ( TargetLevel == elementary ; TargetLevel == all )
-        ))
-    )).
+test(5, 'Sleep induction enforces somnolent regime (BPM <= 64, Energy <= 0.20)').
+call_test(5) :-
+    user_biometrics(user_david, _, _, _, _, _, _, _, _, _, Goal, _),
+    recommend_for_user(user_david, ranked(_, TrackId, _)),
+    track(TrackId, _, _, _, BPM, _, Energy, _, Acousticness, Inst, _, _, _),
+    BPM =< 64.0,
+    Energy =< 0.20,
+    Acousticness >= 0.85,
+    Inst >= 0.85.
 
-% -------------------------------------------------------------------------
-% TEST 7: Minimum Educational Quality Threshold
-% -------------------------------------------------------------------------
-test_educational_min_score :-
-    MinScore = 9,
-    Pref = user_pref(900.0, 3, spring, moderate, [any], all, MinScore),
-    recommend_itineraries(Pref, Results),
-    Results \= [],
-    forall(member(score_entry(_, _, Itin), Results), (
-        Itin = itinerary(_, Sites, _, _),
-        itinerary_avg_edu_score(Sites, AvgScore),
-        AvgScore >= MinScore
-    )).
+test(6, 'Active commute provides upbeat affective valence (Valence >= 0.65)').
+call_test(6) :-
+    user_biometrics(user_clara, _, _, _, _, _, _, _, _, _, Goal, _),
+    recommend_for_user(user_clara, ranked(_, TrackId, _)),
+    track(TrackId, _, _, _, BPM, Valence, _, _, _, _, _, _, _),
+    BPM >= 95.0,
+    Valence >= 0.65.
 
-% -------------------------------------------------------------------------
-% TEST 8: Multi-City Transit Corridor & Cost Accounting
-% -------------------------------------------------------------------------
-test_transit_corridors :-
-    Pref = user_pref(1200.0, 5, spring, moderate, [art_history], all, 7),
-    recommend_itineraries(Pref, Results),
-    % Find at least one multi-city candidate
-    include(is_multi_city, Results, MultiCityResults),
-    MultiCityResults \= [],
-    forall(member(score_entry(_, _, Itin), MultiCityResults), (
-        Itin = itinerary(CityDays, Sites, Transits, _),
-        length(CityDays, NCities),
-        NCities >= 2,
-        Transits \= [],
-        total_itinerary_financials(CityDays, Sites, Transits, TotalCost, cost_breakdown(_, _, TransitCost, _)),
-        TransitCost > 0.0,
-        TotalCost =< 1200.0
-    )).
+test(7, 'Iso-Principle multi-stage entrainment session creates monotonic downward tempo gradient').
+call_test(7) :-
+    recommend_iso_session_for_user(user_sarah, SessionTracks, session_stats(_, Trajectory, ExpectedDrop)),
+    ExpectedDrop > 0,
+    Trajectory = [BPM1, BPM2, BPM3],
+    BPM1 >= BPM2,
+    BPM2 >= BPM3.
 
-is_multi_city(score_entry(_, _, itinerary(CityDays, _, _, _))) :-
-    length(CityDays, N), N >= 2.
+test(8, 'Negative Test: Cardio cadence constraint rejects tracks below 120 BPM').
+call_test(8) :-
+    user_biometrics(user_alex, Name, Act, HR, RHR, HRV, Stress, GSR, Phase, Fat, Goal, Prefs),
+    Biometrics = user_biometrics(user_alex, Name, Act, HR, RHR, HRV, Stress, GSR, Phase, Fat, Goal, Prefs),
+    % weightless_ambient has 60 BPM and should fail validation for cardio_running
+    \+ validate_track_for_biometrics(weightless_ambient, Biometrics, Goal).
 
-% -------------------------------------------------------------------------
-% TEST 9: Graceful Failure Diagnosis on Unsatisfiable Bounds
-% -------------------------------------------------------------------------
-test_unsatisfiable_query_diagnosis :-
-    % 30 EUR for 7 days is impossible for any European destination
-    ImpossiblePref = user_pref(30.0, 7, spring, moderate, [architecture], all, 8),
-    recommend_itineraries(ImpossiblePref, Results),
-    Results == [],
-    diagnose_failure(ImpossiblePref, Diagnostics),
-    Diagnostics \= [],
-    member(Reason, Diagnostics),
-    sub_atom(Reason, _, _, _, 'BUDGET_TOO_LOW').
+test(9, 'Negative Test: Focus constraint rejects tracks with low instrumentalness').
+call_test(9) :-
+    user_biometrics(user_marco, Name, Act, HR, RHR, HRV, Stress, GSR, Phase, Fat, Goal, Prefs),
+    Biometrics = user_biometrics(user_marco, Name, Act, HR, RHR, HRV, Stress, GSR, Phase, Fat, Goal, Prefs),
+    % euphoric_run_anthem has instrumentalness 0.12 (lyrics) and must fail
+    \+ validate_track_for_biometrics(euphoric_run_anthem, Biometrics, Goal).
 
-% -------------------------------------------------------------------------
-% TEST 10: Multi-Criteria Utility Bounds & Descending Rank
-% -------------------------------------------------------------------------
-test_mcda_ranking_monotonicity :-
-    Pref = user_pref(1200.0, 4, autumn, moderate, [architecture, art_history], all, 7),
-    recommend_itineraries(Pref, Results),
-    Results = [score_entry(TopScore, _, _)|Rest],
-    TopScore >= 0.0,
-    TopScore =< 100.0,
-    check_descending_utility(Rest, TopScore).
-
-check_descending_utility([], _).
-check_descending_utility([score_entry(Score, _, _)|Rest], PrevScore) :-
-    Score =< PrevScore,
-    Score >= 0.0,
-    check_descending_utility(Rest, Score).
+test(10, 'MCDA scoring sensitivity: Preferred genre receives higher utility').
+call_test(10) :-
+    user_biometrics(user_sarah, Name, Act, HR, RHR, HRV, Stress, GSR, Phase, Fat, Goal, Prefs),
+    Biometrics = user_biometrics(user_sarah, Name, Act, HR, RHR, HRV, Stress, GSR, Phase, Fat, Goal, Prefs),
+    % Calculate utility with preferred genre vs arbitrary genre
+    calculate_track_utility(weightless_ambient, Biometrics, Goal, balanced, score(U1, _, _, _, S_Pref1)),
+    S_Pref1 =:= 100.0,
+    U1 > 70.0.

@@ -3,14 +3,15 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.env
-venv/
 .venv/
+env/
+venv/
 
 # Prolog
 *.qlf
 *~
 
-# OS & Editor
+# OS / Editor
 .DS_Store
 Thumbs.db
 .vscode/

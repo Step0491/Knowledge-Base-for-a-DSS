@@ -1,154 +1,76 @@
 % =========================================================================
 % Scoring Model Module: Multi-Criteria Decision Analysis (MCDA)
-% Part of: "Knowledge Base for a DSS (Tourism, Cultural Heritage & Education)"
+% Part of: "KB for a DSS: Context-Aware Music Recommendation & Health-Routine Optimization"
 % =========================================================================
 
 :- module(scoring_model, [
-    calculate_itinerary_utility/4,
-    rank_itineraries/3
+    calculate_track_utility/5,
+    rank_candidate_tracks/5
 ]).
 
 :- use_module('../knowledge_base/load_kb.pl').
 :- use_module(dss_rules).
 
-%! calculate_itinerary_utility(+Itinerary, +UserPreferences, +ProfileWeight, -ScoreBreakdown)
-% Profiles:
-% - balanced:         edu=0.40, fin=0.30, temp=0.15, div=0.15
-% - education_first:  edu=0.60, fin=0.15, temp=0.10, div=0.15
-% - budget_conscious: edu=0.25, fin=0.55, temp=0.10, div=0.10
-calculate_itinerary_utility(Itinerary, UserPreferences, Profile, ScoreBreakdown) :-
-    Itinerary = itinerary(CityDays, Sites, Transits, DailyAllocations),
-    UserPreferences = user_pref(MaxBudget, Days, _Season, Pace, DesiredTopics, EduLevel, MinEduScore),
-    
-    % Fetch weights
-    profile_weights(Profile, W_Edu, W_Fin, W_Temp, W_Div),
-    
-    % 1. Educational Sub-Score (0 - 100)
-    score_educational(Sites, DesiredTopics, EduLevel, MinEduScore, S_Edu),
-    
-    % 2. Financial Sub-Score (0 - 100)
-    total_itinerary_financials(CityDays, Sites, Transits, TotalCost, _),
-    score_financial(TotalCost, MaxBudget, S_Fin),
-    
-    % 3. Temporal Sub-Score (0 - 100)
-    score_temporal(DailyAllocations, Pace, Transits, Days, S_Temp),
-    
-    % 4. Diversity & Logistics Sub-Score (0 - 100)
-    score_diversity(CityDays, Sites, S_Div),
-    
-    % Combined Weighted Utility
-    FinalUtility is (W_Edu * S_Edu) + (W_Fin * S_Fin) + (W_Temp * S_Temp) + (W_Div * S_Div),
-    ScoreBreakdown = score(FinalUtility, S_Edu, S_Fin, S_Temp, S_Div).
+%! profile_weights(+ProfileName, -W_Bio, -W_Mood, -W_Goal, -W_Pref)
+% Weights sum to 1.0.
+profile_weights(health_priority,      0.45, 0.25, 0.20, 0.10).
+profile_weights(performance_priority, 0.30, 0.20, 0.40, 0.10).
+profile_weights(acoustic_first,       0.25, 0.35, 0.15, 0.25).
+profile_weights(balanced,             0.35, 0.25, 0.25, 0.15).
+profile_weights(_,                    0.35, 0.25, 0.25, 0.15). % default fallback
 
-profile_weights(balanced,         0.40, 0.30, 0.15, 0.15).
-profile_weights(education_first,  0.60, 0.15, 0.10, 0.15).
-profile_weights(budget_conscious, 0.25, 0.55, 0.10, 0.10).
-profile_weights(_,                0.40, 0.30, 0.15, 0.15). % default balanced
+%! calculate_track_utility(+TrackId, +Biometrics, +RoutineId, +Profile, -ScoreBreakdown)
+% Evaluates multi-criteria utility U(t) for a given track in [0, 100].
+calculate_track_utility(TrackId, Biometrics, RoutineId, Profile, ScoreBreakdown) :-
+    Biometrics = user_biometrics(_, _, _, UserHR, _, _, Stress, _, _, Fatigue, _, PreferredGenres),
+    health_routine(RoutineId, _, _, _, _, _, _, _, _, _, _, TargetMinHR, TargetMaxHR, _, _, _),
+    profile_weights(Profile, W_Bio, W_Mood, W_Goal, W_Pref),
 
-% --- Sub-Score Computations ---
+    track(TrackId, _, _, _, BPM, Valence, Energy, _, Acousticness, Inst, _, _, Attrs),
 
-score_educational([], _, _, _, 0.0) :- !.
-score_educational(Sites, DesiredTopics, _EduLevel, _MinScore, Score) :-
-    % Average site educational score (1-10 -> 0-50 pts)
-    itinerary_avg_edu_score(Sites, AvgSiteScore),
-    BaseEduScore is (AvgSiteScore / 10.0) * 50.0,
-    
-    % Topic coverage (0-30 pts)
-    ( DesiredTopics == [] ; DesiredTopics == [any]
-    ->  TopicScore = 30.0
-    ;   findall(Req, (
-            member(Req, DesiredTopics),
-            member(SiteId, Sites),
-            site_satisfies_topic(SiteId, Req)
-        ), Matched),
-        sort(Matched, UniqueMatched),
-        length(UniqueMatched, NMatched),
-        length(DesiredTopics, NTotal),
-        TopicScore is (NMatched / NTotal) * 30.0
+    % 1. Biometric Alignment Sub-Score S_bio (0 - 100)
+    TargetMidHR is (TargetMinHR + TargetMaxHR) / 2.0,
+    BpmDiff is abs(BPM - TargetMidHR),
+    ( BpmDiff =< 40.0
+    -> RawBioScore is 100.0 - (BpmDiff / 40.0 * 60.0)
+    ;  RawBioScore is 40.0
     ),
-    
-    % Academic depth & UNESCO criteria density bonus (0-20 pts)
-    findall(CritCount, (
-        member(SiteId, Sites),
-        heritage_site(SiteId, _, _, _, Criteria, _, _, _, _, _, _),
-        length(Criteria, CritCount)
-    ), AllCrits),
-    sum_list(AllCrits, TotalCriteria),
-    length(Sites, NSites),
-    AvgCriteria is TotalCriteria / NSites,
-    CritBonus is min(20.0, (AvgCriteria / 4.0) * 20.0),
-    
-    Score is BaseEduScore + TopicScore + CritBonus.
-
-score_financial(TotalCost, MaxBudget, Score) :-
-    MaxBudget > 0,
-    CostRatio is TotalCost / MaxBudget,
-    ( CostRatio =< 1.0
-    ->  % Ideal utilization between 60% and 90%
-        SavingsRatio is 1.0 - CostRatio,
-        % Reward staying under budget without being empty
-        Score is 50.0 + (SavingsRatio * 50.0)
-    ;   % Over budget receives heavy penalty
-        OverRatio is CostRatio - 1.0,
-        Score is max(0.0, 50.0 - (OverRatio * 200.0))
-    ).
-
-score_temporal(DailyAllocations, Pace, Transits, TotalDays, Score) :-
-    pace_max_daily_hours(Pace, MaxDailyHours),
-    % Measure daily utilization
-    findall(DayUtil, (
-        member(day(_, DaySites), DailyAllocations),
-        maplist(dss_rules:site_duration, DaySites, Durations),
-        sum_list(Durations, DayHours),
-        DayUtil is min(1.0, DayHours / MaxDailyHours)
-    ), Utils),
-    ( Utils == []
-    ->  AvgUtil = 0.5
-    ;   sum_list(Utils, SumUtil),
-        length(Utils, NDays),
-        AvgUtil is SumUtil / NDays
+    % Bonus for high acousticness/instrumentalness under elevated stress
+    ( Stress > 65.0
+    -> S_Bio is min(100.0, RawBioScore + (Acousticness * 10.0) + (Inst * 10.0))
+    ;  S_Bio is RawBioScore
     ),
-    BaseUtilScore is AvgUtil * 70.0,
-    
-    % Penalty for excessive transit travel time
-    findall(Hours, (member(transit(O, D), Transits), intercity_transit(O, D, Hours, _, _)), TransitTimes),
-    sum_list(TransitTimes, TotalTransitHours),
-    TransitPenalty is min(30.0, (TotalTransitHours / TotalDays) * 10.0),
-    
-    Score is max(0.0, BaseUtilScore + 30.0 - TransitPenalty).
 
-score_diversity(CityDays, Sites, Score) :-
-    % Historical eras variety (0-40 pts)
-    findall(Era, (
-        member(SiteId, Sites),
-        heritage_site(SiteId, _, _, _, _, Era, _, _, _, _, _)
-    ), Eras),
-    sort(Eras, UniqueEras),
-    length(UniqueEras, NEras),
-    EraScore is min(40.0, NEras * 15.0),
-    
-    % Destination walkability and logistics (0-60 pts)
-    findall(Walk, (
-        member(city(DestId, _), CityDays),
-        destination_logistics(DestId, Walk, _, _)
-    ), Walks),
-    ( Walks == []
-    ->  AvgWalk = 8.0
-    ;   sum_list(Walks, SumWalk),
-        length(Walks, NCities),
-        AvgWalk is SumWalk / NCities
+    % 2. Mood & Affective Modulation Sub-Score S_mood (0 - 100)
+    % When fatigued or stressed, higher valence improves affective recovery
+    ( (Stress > 50.0 ; Fatigue > 50.0)
+    -> S_Mood is (Valence * 70.0) + 30.0
+    ;  S_Mood is (Valence * 50.0) + 50.0
     ),
-    LogisticsScore is (AvgWalk / 10.0) * 60.0,
-    
-    Score is EraScore + LogisticsScore.
 
-%! rank_itineraries(+CandidateItineraries, +UserPreferences, -RankedPairs)
-% Sorts candidate itineraries in descending order of calculated utility.
-rank_itineraries(Candidates, UserPreferences, RankedPairs) :-
-    maplist(score_candidate(UserPreferences), Candidates, ScoredList),
-    % Sort in descending order of utility score (first element)
-    sort(1, @>=, ScoredList, RankedPairs).
+    % 3. Health Routine Goal Sub-Score S_goal (0 - 100)
+    % Reward energy matching and required attributes
+    health_routine(RoutineId, _, _, _, _, _, _, MinEng, MaxEng, _, _, _, _, _, ReqAttrs, _),
+    ( (Energy >= MinEng, Energy =< MaxEng) -> EngScore = 60.0 ; EngScore = 30.0 ),
+    intersection(ReqAttrs, Attrs, CommonAttrs),
+    length(CommonAttrs, NumMatched),
+    AttrBonus is min(40.0, NumMatched * 40.0),
+    S_Goal is EngScore + AttrBonus,
 
-score_candidate(UserPreferences, Itinerary, score_entry(Utility, ScoreObj, Itinerary)) :-
-    calculate_itinerary_utility(Itinerary, UserPreferences, balanced, ScoreObj),
-    ScoreObj = score(Utility, _, _, _, _).
+    % 4. User Preference Sub-Score S_pref (0 - 100)
+    track(TrackId, _, _, Genre, _, _, _, _, _, _, _, _, _),
+    ( member(Genre, PreferredGenres) -> S_Pref = 100.0 ; S_Pref = 50.0 ),
+
+    % Multi-Attribute Utility Function
+    FinalUtility is (W_Bio * S_Bio) + (W_Mood * S_Mood) + (W_Goal * S_Goal) + (W_Pref * S_Pref),
+    ScoreBreakdown = score(FinalUtility, S_Bio, S_Mood, S_Goal, S_Pref).
+
+%! rank_candidate_tracks(+CandidateIds, +Biometrics, +RoutineId, +Profile, -RankedResults)
+% Computes utilities and sorts candidate tracks in descending order of utility.
+rank_candidate_tracks(Candidates, Biometrics, RoutineId, Profile, RankedResults) :-
+    findall(ranked(Utility, TrackId, ScoreBreakdown), (
+        member(TrackId, Candidates),
+        calculate_track_utility(TrackId, Biometrics, RoutineId, Profile, ScoreBreakdown),
+        ScoreBreakdown = score(Utility, _, _, _, _)
+    ), ScoredList),
+    sort(1, @>=, ScoredList, RankedResults).
