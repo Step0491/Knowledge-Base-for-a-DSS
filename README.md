@@ -6,156 +6,156 @@
 [![Notebook](https://img.shields.io/badge/Notebook-Jupyter_Walkthrough-orange.svg)](demo_walkthrough.ipynb)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-> **Abstract:** I sistemi convenzionali di raccomandazione musicale soffrono del limite della *"raccomandazione cieca al contesto"*: suggeriscono canzoni in base allo storico di ascolto o alla popolarità globale, senza considerare lo stato psicofisico effettivo dell'ascoltatore.
+> **Abstract:** Conventional music recommendation systems suffer from the *"context-blind recommendation"* flaw: they suggest songs based on historical listening logs or aggregate popularity, completely disregarding the user's immediate psychophysiological state.
 >
-> Questo **Decision Support System (DSS)** supera tale limite integrando le caratteristiche acustiche matematiche del catalogo **Spotify** (BPM, valenza emotiva, livello energetico, strumentalità) con la telemetria biometrica real-time di uno **Smartwatch** (frequenza cardiaca, indice di stress, attività in corso). 
+> This **Decision Support System (DSS)** overcomes this limitation by fusing mathematical audio features from **Spotify** (tempo/BPM, affective valence, energy intensity, instrumental purity) with real-time biometric telemetry from a **Smartwatch** (heart rate, stress score, physical/cognitive activity).
 > 
-> Utilizzando la **programmazione logica in Prolog** e criteri di matching fisiologico, il DSS agisce come un assistente cognitivo in tempo reale: valuta l'ammissibilità dei brani ed eroga la traccia ottimale per ridurre lo stress acuto, favorire la concentrazione o sostenere l'allenamento cardio, spiegando sempre all'utente il razionale clinico della decisione.
+> Leveraging **Prolog first-order logic** and a **hierarchical AND-OR inference tree**, the DSS acts as an automated real-time cognitive assistant: it evaluates candidate feasibility across physiological, cognitive, circadian, and medical safety pillars to prescribe the optimal track or synthesize a staged relaxation routine (*Altshuler's Iso-Principle*), providing transparent biofeedback explanations.
 
 ---
 
-## 1. Architettura & Struttura del Progetto
+## 1. System Architecture & Repository Structure
 
-Il progetto è strutturato in modo compatto, lineare e facilmente navigabile:
+The codebase is engineered to be lightweight, modular, and defensible:
 
 ```
 Knowledge-Base-for-a-DSS/
 ├── data/
-│   ├── spotify_tracks.json        # Catalogo musicale con parametri acustici Spotify
-│   └── smartwatch_biometrics.json # Log di telemetria e profili utente smartwatch
-├── generate_kb.py                 # Script ETL: compila i dati JSON in fatti Prolog
-├── knowledge_base.pl              # Fatti Prolog: brano/8 e utente/7
-├── dss_rules.pl                   # Regole di inferenza logica, vincoli e scoring
-├── main.pl                        # Entry point Prolog con query intuitive (es: ?- raccomanda(user_sarah).)
-├── test_suite.py                  # Test automatici di verifica formale (10/10 test)
-├── demo_walkthrough.ipynb         # NOTEBOOK JUPYTER completo e illustrativo (per l'orale)
-├── LICENSE                        # Licenza MIT
-└── README.md                      # Questa relazione di progetto
+│   ├── spotify_tracks.json        # Curated catalog of 30 tracks with Spotify acoustic attributes
+│   └── smartwatch_biometrics.json # 6 realistic user telemetry profiles (Heart Rate, Stress, Activity)
+├── generate_kb.py                 # ETL pipeline: compiles JSON catalogs into normalized Prolog facts
+├── knowledge_base.pl              # Emitted Prolog facts: track/8 and user/7
+├── dss_rules.pl                   # Hierarchical inference engine: meta-rules, sub-rules, and scoring
+├── main.pl                        # Main Prolog entry point with intuitive user queries (e.g. ?- recommend(user_sarah).)
+├── test_suite.py                  # Standalone automated verification suite (10/10 tests passed)
+├── demo_walkthrough.ipynb         # Interactive Jupyter Notebook walkthrough (pre-executed for oral exams)
+├── LICENSE                        # MIT License
+└── README.md                      # Academic project documentation
 ```
 
 ---
 
-## 2. Modello dei Dati (Knowledge Base)
+## 2. Knowledge Base Data Model
 
-### 2.1 Catalogo Spotify (`data/spotify_tracks.json` $\rightarrow$ `brano/8`)
-Ogni brano è rappresentato dal predicato Prolog:
+### 2.1 Spotify Audio Features (`data/spotify_tracks.json` $\rightarrow$ `track/8`)
+Each song is represented by the normalized Prolog relation:
 ```prolog
-brano(Id, Titolo, Artista, Genere, BPM, Valenza, Energia, Strumentale).
+track(Id, Title, Artist, Genre, BPM, Valence, Energy, Instrumentalness).
 ```
-* **BPM (Beats Per Minute):** Velocità del tempo musicale (es. 60.0 ambient, 140.0 techno).
-* **Valenza (0.0 - 1.0):** Positività e allegria percepita del brano.
-* **Energia (0.0 - 1.0):** Intensità, attività ed eccitazione sonora.
-* **Strumentale (0.0 - 1.0):** Confidenza dell'assenza di parti vocali/cantate ($> 0.70$ = brano solo strumentale).
+* **BPM (Beats Per Minute):** Musical tempo (e.g. 60.0 ambient, 140.0 techno).
+* **Valence ($[0.0, 1.0]$):** Musical positiveness and cheerfulness.
+* **Energy ($[0.0, 1.0]$):** Perceptual measure of acoustic intensity and activity.
+* **Instrumentalness ($[0.0, 1.0]$):** Confidence that the track contains no vocal lyrics ($> 0.70$ signifies lyric-free instrumental music).
 
-### 2.2 Telemetria Smartwatch (`data/smartwatch_biometrics.json` $\rightarrow$ `utente/7`)
-Ogni profilo utente rileva lo stato psicofisico corrente:
+### 2.2 Smartwatch Telemetry Log (`data/smartwatch_biometrics.json` $\rightarrow$ `user/7`)
+Captures the real-time psychophysiological state:
 ```prolog
-utente(Id, Nome, Attivita, BattitoCardiaco, LivelloStress, Obiettivo, GeneriPreferiti).
+user(Id, Name, Activity, HeartRate, StressLevel, TargetGoal, PreferredGenres).
 ```
-* **Attività:** `high_stress_work`, `cardio_running`, `deep_focus_study`, `sleep_preparation`, `active_commute`.
-* **Battito Cardiaco (BPM):** Frequenza rilevata dal sensore ottico PPG.
-* **Livello di Stress (0 - 100):** Indice derivato dalla variabilità della frequenza cardiaca (HRV) e risposta galvanica della pelle (GSR).
+* **Activity:** `high_stress_work`, `cardio_running`, `deep_focus_study`, `sleep_preparation`, `active_commute`.
+* **Heart Rate (BPM):** Live PPG sensor readings.
+* **Stress Level ($[0, 100]$):** Autonomic arousal derived from Heart Rate Variability (HRV) and Galvanic Skin Response (GSR).
 
 ---
 
-## 3. Motore di Inferenza: Albero Gerarchico delle Regole (`dss_rules.pl`)
+## 3. Inference Engine: Hierarchical AND-OR Goal Tree (`dss_rules.pl`)
 
-Il motore logico adotta un'architettura ad **albero di inferenza AND-OR (Backward Chaining)** articolata su livelli di astrazione successivi, tipica dei sistemi esperti accademici:
+The expert system decomposes high-level goals into multi-tiered backward chaining rules:
 
 ```
-[Livello 0: Meta-Regola]
-       brano_raccomandabile(Brano, Utente)
+[Level 0: Meta-Rule]
+       recommendable_track(Track, User)
             |
-            +---> compatibile_fisiologico/2  ---> [Livello 2: stato_simpatico_acuto, regime_aerobico_cardio, ...]
-            |                                      |--> [Livello 3: tempo_lento, energia_bassa, tempo_rapido]
+            +---> physiologically_compatible/2  ---> [Level 2: acute_sympathetic_state, cardio_aerobic_regime, ...]
+            |                                         |--> [Level 3: slow_tempo, low_energy, fast_tempo]
             |
-            +---> compatibile_cognitivo/2    ---> [Livello 2: protezione_loop_fonologico (Strumentale >= 0.70)]
+            +---> cognitively_compatible/2      ---> [Level 2: phonological_loop_protection (Inst >= 0.70)]
             |
-            +---> sicurezza_e_controindicazioni/2 -> [Livello 2: sbarramento tachicardia ed esaurimento da fatica]
+            +---> safety_and_contraindications/2 -> [Level 2: tachycardia barrier & fatigue overstimulation check]
             |
-            +---> coerenza_circadiana/2      ---> [Livello 2: sbarramento orario per induzione al sonno]
+            +---> circadian_coherent/2          ---> [Level 2: biological sleep window acoustic ceilings]
 ```
 
-### A. I Quattro Pilastri Ortogonali (Livello 1)
-1. **Compatibilità Fisiologica (`compatibile_fisiologico/2`):**  
-   Valuta lo stato autonomico (simpatico vs parasimpatico). Se l'utente è in stress o battito accelerato, richiede un brano ad azione sedativa (`BPM <= 75`, `Energia <= 0.35`). Se è in corsa cardio, richiede azione ergogenica (`BPM >= 120`, `Energia >= 0.70`).
-2. **Compatibilità Cognitiva (`compatibile_cognitivo/2`):**  
-   In attività di studio o lavoro intellettuale profondo (`deep_focus_study`), preserva il loop fonologico della memoria di lavoro imponendo il vincolo categorico di brani puramente strumentali (`Strumentale >= 0.70`).
-3. **Sicurezza Medica & Sbarramenti Negativi (`sicurezza_e_controindicazioni/2`):**  
-   Previene il sovraccarico: vieta categoricamente brani ad alto tempo o energia ($>100$ BPM o $>0.60$ energia) per utenti già in tachicardia e stress acuto ($>110$ BPM e $>75$ stress).
-4. **Coerenza Circadiana (`coerenza_circadiana/2`):**  
-   Allinea la selezione alla fase biologica: vieta brani eccitanti durante la preparazione al sonno.
+### A. The Four Evaluation Pillars (Level 1)
+1. **Physiological Compatibility (`physiologically_compatible/2`):**  
+   Evaluates autonomic balance. An acute sympathetic state requires sedative acoustic parameters (`BPM <= 75`, `Energy <= 0.35`). Cardio running activates ergogenic synchronization (`BPM >= 120`, `Energy >= 0.70`).
+2. **Cognitive Protection (`cognitively_compatible/2`):**  
+   During intellectual tasks (`deep_focus_study`), protects working memory from lyrical phonological interference by enforcing `Instrumentalness >= 0.70`.
+3. **Medical Safety Barriers (`safety_and_contraindications/2`):**  
+   Implements negative barriers (*primum non nocere*): categorically prohibits high-arousal tracks ($>100$ BPM or $>0.60$ energy) for users exhibiting acute stress tachycardia ($>110$ BPM and $>75$ stress).
+4. **Circadian Coherence (`circadian_coherent/2`):**  
+   Enforces tempo and acoustic ceilings during sleep induction routines.
 
-### B. Altshuler's Iso-Principle (Musicoterapia Applicata)
-Per soggetti con forte agitazione (es. 114 BPM), proporre immediatamente musica a 60 BPM induce rifiuto. Il predicato `sessione_iso_principle/2` costruisce una sequenza guidata a 3 scalini:
-$$\text{Aggancio (105 BPM)} \longrightarrow \text{Ponte (85 BPM)} \longrightarrow \text{Obiettivo Riposo (60 BPM)}$$
+### B. Altshuler's Iso-Principle (Clinical Music Therapy)
+For patients in acute sympathetic distress (e.g. 114 BPM), abruptly playing a 60 BPM ambient track causes affective rejection. The predicate `iso_principle_session/2` generates a 3-stage entrainment session:
+$$\text{Entry (105 BPM)} \longrightarrow \text{Bridge (85 BPM)} \longrightarrow \text{Target Resting Lock (60 BPM)}$$
 
 ---
 
-## 4. Guida all'Uso & Esecuzione
+## 4. Usage & Execution Guide
 
-### Opzione 1: Notebook Jupyter (Consigliato per l'Esame Orale)
-Apri il file [`demo_walkthrough.ipynb`](demo_walkthrough.ipynb) con VS Code o Jupyter:
+### Option 1: Jupyter Notebook (Recommended for Oral Presentations)
+Open [`demo_walkthrough.ipynb`](demo_walkthrough.ipynb) in VS Code or JupyterLab:
 ```bash
 jupyter notebook demo_walkthrough.ipynb
 ```
-Il notebook illustra passo dopo passo il caricamento dei dati, la compilazione dei fatti Prolog, la raccomandazione dei tre casi clinici e l'esecuzione dei test.
+The notebook is fully pre-executed, showcasing exploratory data analysis, KB compilation, recommendation scenarios, and the test suite.
 
-### Opzione 2: Verifica Immediata da Terminale (Python)
-Esegui la suite di test completa:
+### Option 2: Automated Verification from Terminal (Python)
+Run the 10-point logical verification test suite:
 ```bash
 python test_suite.py
 ```
-Per rigenerare i fatti Prolog dai JSON:
+To re-compile Prolog facts from the raw JSON catalogs:
 ```bash
 python generate_kb.py
 ```
 
-### Opzione 3: Esecuzione Interattiva con SWI-Prolog
-Avvia il terminale Prolog caricando il file principale:
+### Option 3: Interactive SWI-Prolog REPL
+Launch SWI-Prolog and consult the entry module:
 ```bash
 swipl -s main.pl
 ```
-Query eseguibili nel prompt `?-`:
+Available top-level queries:
 ```prolog
-% Mostra la raccomandazione e il razionale per Sarah (stress acuto da lavoro)
-?- raccomanda(user_sarah).
+% Query recommendation and clinical rationale for Sarah Miller (acute stress)
+?- recommend(user_sarah).
 
-% Mostra la sequenza a 3 gradini Iso-Principle per la discesa del battito
-?- raccomanda_sessione(user_sarah).
+% Generate 3-stage Altshuler Iso-Principle entrainment session
+?- recommend_session(user_sarah).
 
-% Esegue la demo per tutti e 3 i casi clinici (Stress, Corsa, Studio)
+% Run end-to-end demonstrations across all 3 scenarios
 ?- demo.
 
-% Esegue i test logici integrati in Prolog
-?- esegui_test.
+% Execute native Prolog logical verification test suite
+?- run_tests.
 ```
 
 ---
 
-## 5. Risultati dei Test di Correttezza Logica
+## 5. Logical Verification Results
 
-L'esecuzione del file `test_suite.py` valida 10 criteri formali con il seguente esito:
+Executing `test_suite.py` validates all 10 formal criteria with zero errors:
 ```
-======================================================================
- VERIFICA DI CORRETTEZZA LOGICA DEL SISTEMA (TEST SUITE)
-======================================================================
- [+] 1. Riduzione stress (Sarah Miller) -> Brano lento e rilassante: PASSATO
- [+] 2. Cardio Workout (Alex Chen) -> Cadenza veloce ed alta energia: PASSATO
- [+] 3. Deep Focus (Marco Rossi) -> Zero parole cantate (strumentale): PASSATO
- [+] 4. Sonno (David Becker) -> Tempo lentissimo e minima energia: PASSATO
- [+] 5. Recupero post workout (Elena Rostova) -> Tempo controllato: PASSATO
- [+] 6. Commute attivo (Clara Dupont) -> Tono allegro (valenza positiva): PASSATO
- [+] 7. Entrainment Iso-Principle -> Traiettoria monotonica decrescente: PASSATO
- [+] 8. Test Negativo -> Brano con parole escluso in fase di studio: PASSATO
- [+] 9. Test Negativo -> Brano lento escluso durante la corsa cardio: PASSATO
- [+] 10. Scoring -> Bonus per genere musicale preferito dall'utente: PASSATO
-----------------------------------------------------------------------
- Esito Test: 10/10 Superati con successo.
-======================================================================
+========================================================================
+ LOGICAL VERIFICATION TEST SUITE (HIERARCHICAL AND-OR GOAL TREE)
+========================================================================
+ [+] 1. Physiological Sedative Pillar (Sarah) -> Slow, instrumental ambient track: PASSED
+ [+] 2. Physiological Ergogenic Pillar (Alex) -> High cadence and maximal energy: PASSED
+ [+] 3. Cognitive Protection Pillar (Marco) -> Zero vocal intrusion (instrumental): PASSED
+ [+] 4. Circadian Sleep Coherence (David) -> Somnolent acoustic regime (BPM <= 64): PASSED
+ [+] 5. Post-Workout Homeostatic Recovery (Elena) -> Moderate controlled activation: PASSED
+ [+] 6. Active Commute Vitality (Clara) -> Positive valence and moderate pacing: PASSED
+ [+] 7. Iso-Principle Entrainment -> Downward monotonicity (Entry -> Bridge -> Target): PASSED
+ [+] 8. Medical Safety Barrier (Negative Test) -> Prohibit high-energy track for Sarah: PASSED
+ [+] 9. Cognitive Barrier (Negative Test) -> Prohibit lyrical track for Marco in study: PASSED
+ [+] 10. Multi-Attribute Scoring -> Affirmative bonus for user genre affinity: PASSED
+------------------------------------------------------------------------
+ Test Execution Summary: 10/10 Passed successfully.
+========================================================================
 ```
 
 ---
 
-## 6. Licenza
-Distribuito sotto licenza **MIT**. Consulta il file [LICENSE](LICENSE) per i dettagli.
+## 6. License
+Distributed under the **MIT License**. See [LICENSE](LICENSE) for details.

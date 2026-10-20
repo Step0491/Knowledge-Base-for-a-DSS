@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 test_suite.py
-Suite di Test di Correttezza Logica per il Decision Support System.
-Riflette l'albero di inferenza gerarchico (Meta-regole, Sotto-regole e Vincoli di Sicurezza).
+Automated logical verification test harness for the Decision Support System.
+Validates the hierarchical AND-OR inference tree (meta-rules, sub-rules, and safety barriers).
 """
 
 import json
@@ -17,70 +17,70 @@ def load_data():
         users = {u["user_id"]: u for u in json.load(f)}
     return tracks, users
 
-# --- SOTTO-REGOLE DI LIVELLO 2 E 3 ---
+# --- LEVEL 2 & 3 SUB-RULES ---
 
-def stato_simpatico_acuto(u):
+def acute_sympathetic_state(u):
     return u["target_health_goal"] == "stress_downregulation" or (u["heart_rate_bpm"] >= 100.0 and u["stress_level"] >= 65.0)
 
-def regime_aerobico_cardio(u):
+def cardio_aerobic_regime(u):
     return u["target_health_goal"] == "cardio_peak_performance" or (u["current_activity"] == "cardio_running" and u["heart_rate_bpm"] >= 120.0)
 
-def stato_induzione_sonno(u):
+def sleep_induction_state(u):
     return u["target_health_goal"] == "sleep_induction" or u["current_activity"] == "sleep_preparation"
 
-def brano_azione_sedativa(t):
+def sedative_track(t):
     return t["bpm"] <= 75.0 and t["energy"] <= 0.35 and t["instrumentalness"] >= 0.70
 
-def brano_azione_ergogenica(t):
+def ergogenic_track(t):
     return t["bpm"] >= 120.0 and t["energy"] >= 0.70
 
-def brano_azione_somnolente(t):
+def somnolent_track(t):
     return t["bpm"] <= 64.0 and t["energy"] <= 0.20 and t["instrumentalness"] >= 0.85
 
-def brano_moderata_attivazione(t):
+def moderate_activation_track(t):
     return 70.0 <= t["bpm"] <= 115.0 and t["energy"] <= 0.65 and t["valence"] >= 0.40
 
-# --- PILASTRI DI LIVELLO 1 ---
+# --- LEVEL 1 EVALUATION PILLARS ---
 
-def compatibile_fisiologico(t, u):
-    if stato_simpatico_acuto(u):
-        return brano_azione_sedativa(t)
-    if regime_aerobico_cardio(u):
-        return brano_azione_ergogenica(t)
-    if stato_induzione_sonno(u):
-        return brano_azione_somnolente(t)
-    return brano_moderata_attivazione(t)
+def physiologically_compatible(t, u):
+    if acute_sympathetic_state(u):
+        return sedative_track(t)
+    if cardio_aerobic_regime(u):
+        return ergogenic_track(t)
+    if sleep_induction_state(u):
+        return somnolent_track(t)
+    return moderate_activation_track(t)
 
-def compatibile_cognitivo(t, u):
+def cognitively_compatible(t, u):
     if u["current_activity"] == "deep_focus_study" or u["target_health_goal"] == "deep_focus_flow":
         return t["instrumentalness"] >= 0.70 and (70.0 <= t["bpm"] <= 95.0) and t["energy"] <= 0.55
     return True
 
-def sicurezza_e_controindicazioni(t, u):
-    # Controindicazione tachicardica: vietato stimolare utenti in forte stress tachicardico
+def safety_and_contraindications(t, u):
+    # Tachycardia barrier: prohibit high-tempo/high-energy stimulation during acute stress tachycardia
     if u["heart_rate_bpm"] > 110.0 and u["stress_level"] > 75.0:
         if t["bpm"] > 100.0 or t["energy"] > 0.60:
             return False
-    # Controindicazione fatica: vietata alta energia se spossato
+    # Fatigue exhaustion barrier
     if u["current_activity"] == "high_stress_work" and u["stress_level"] > 80.0:
         if t["energy"] > 0.50:
             return False
     return True
 
-def coerenza_circadiana(t, u):
+def circadian_coherent(t, u):
     if u["current_activity"] == "sleep_preparation" or u["target_health_goal"] == "sleep_induction":
         return t["bpm"] <= 68.0 and t["energy"] <= 0.30
     return True
 
-# --- META-REGOLA DI LIVELLO 0 ---
+# --- LEVEL 0 META-RULE ---
 
-def brano_raccomandabile(t, u):
-    return (compatibile_fisiologico(t, u) and
-            compatibile_cognitivo(t, u) and
-            sicurezza_e_controindicazioni(t, u) and
-            coerenza_circadiana(t, u))
+def recommendable_track(t, u):
+    return (physiologically_compatible(t, u) and
+            cognitively_compatible(t, u) and
+            safety_and_contraindications(t, u) and
+            circadian_coherent(t, u))
 
-def calcola_utilita(t, u):
+def calculate_utility(t, u):
     target_bpm_map = {
         "stress_downregulation": 65.0,
         "cardio_peak_performance": 145.0,
@@ -91,19 +91,19 @@ def calcola_utilita(t, u):
     }
     target_bpm = target_bpm_map.get(u["target_health_goal"], 80.0)
     delta_bpm = abs(t["bpm"] - target_bpm)
-    score_frequenza = max(20.0, 100.0 - (delta_bpm * 1.5))
-    score_genere = 25.0 if t["genre"] in u.get("preferred_genres", []) else 0.0
-    score_affettivo = (t["valence"] * 15.0) + (t["instrumentalness"] * 10.0)
-    return min(100.0, (score_frequenza * 0.50) + score_genere + score_affettivo)
+    frequency_score = max(20.0, 100.0 - (delta_bpm * 1.5))
+    genre_bonus = 25.0 if t["genre"] in u.get("preferred_genres", []) else 0.0
+    affective_score = (t["valence"] * 15.0) + (t["instrumentalness"] * 10.0)
+    return min(100.0, (frequency_score * 0.50) + genre_bonus + affective_score)
 
-def raccomanda(user_id, tracks, users):
+def recommend(user_id, tracks, users):
     user = users[user_id]
-    candidati = [t for t in tracks.values() if brano_raccomandabile(t, user)]
-    if not candidati:
+    candidates = [t for t in tracks.values() if recommendable_track(t, user)]
+    if not candidates:
         return None
-    candidati.sort(key=lambda t: calcola_utilita(t, user), reverse=True)
-    best = candidati[0]
-    return best, calcola_utilita(best, user)
+    candidates.sort(key=lambda t: calculate_utility(t, user), reverse=True)
+    best = candidates[0]
+    return best, calculate_utility(best, user)
 
 def test_iso_principle(tracks, users):
     user = users["user_sarah"]
@@ -119,60 +119,60 @@ def test_iso_principle(tracks, users):
 
 def main():
     print("\n" + "=" * 72)
-    print(" VERIFICA DI CORRETTEZZA LOGICA DEL SISTEMA (ALBERO DI REGOLE GERARCHICO)")
+    print(" LOGICAL VERIFICATION TEST SUITE (HIERARCHICAL AND-OR GOAL TREE)")
     print("=" * 72)
     tracks, users = load_data()
 
     tests = [
-        ("1. Pilastro Fisiologico Sedativo (Sarah) -> Brano lento, strumentale",
-         lambda: (raccomanda("user_sarah", tracks, users)[0]["bpm"] <= 75.0 and
-                  raccomanda("user_sarah", tracks, users)[0]["energy"] <= 0.35 and
-                  raccomanda("user_sarah", tracks, users)[0]["instrumentalness"] >= 0.70)),
+        ("1. Physiological Sedative Pillar (Sarah) -> Slow, instrumental ambient track",
+         lambda: (recommend("user_sarah", tracks, users)[0]["bpm"] <= 75.0 and
+                  recommend("user_sarah", tracks, users)[0]["energy"] <= 0.35 and
+                  recommend("user_sarah", tracks, users)[0]["instrumentalness"] >= 0.70)),
 
-        ("2. Pilastro Fisiologico Ergogenico (Alex) -> Cadenza rapida ed alta energia",
-         lambda: (raccomanda("user_alex", tracks, users)[0]["bpm"] >= 120.0 and
-                  raccomanda("user_alex", tracks, users)[0]["energy"] >= 0.70)),
+        ("2. Physiological Ergogenic Pillar (Alex) -> High cadence and maximal energy",
+         lambda: (recommend("user_alex", tracks, users)[0]["bpm"] >= 120.0 and
+                  recommend("user_alex", tracks, users)[0]["energy"] >= 0.70)),
 
-        ("3. Pilastro Cognitivo (Marco) -> Protezione loop fonologico (strumentale puro)",
-         lambda: (raccomanda("user_marco", tracks, users)[0]["instrumentalness"] >= 0.70 and
-                  70.0 <= raccomanda("user_marco", tracks, users)[0]["bpm"] <= 95.0)),
+        ("3. Cognitive Protection Pillar (Marco) -> Zero vocal intrusion (instrumental)",
+         lambda: (recommend("user_marco", tracks, users)[0]["instrumentalness"] >= 0.70 and
+                  70.0 <= recommend("user_marco", tracks, users)[0]["bpm"] <= 95.0)),
 
-        ("4. Coerenza Circadiana (David) -> Regime ipno-inducente serale (BPM <= 64)",
-         lambda: (raccomanda("user_david", tracks, users)[0]["bpm"] <= 64.0 and
-                  raccomanda("user_david", tracks, users)[0]["energy"] <= 0.20)),
+        ("4. Circadian Sleep Coherence (David) -> Somnolent acoustic regime (BPM <= 64)",
+         lambda: (recommend("user_david", tracks, users)[0]["bpm"] <= 64.0 and
+                  recommend("user_david", tracks, users)[0]["energy"] <= 0.20)),
 
-        ("5. Omeostasi / Recupero (Elena) -> Attivazione moderata e controllata",
-         lambda: (raccomanda("user_elena", tracks, users)[0]["bpm"] <= 115.0 and
-                  raccomanda("user_elena", tracks, users)[0]["energy"] <= 0.65)),
+        ("5. Post-Workout Homeostatic Recovery (Elena) -> Moderate controlled activation",
+         lambda: (recommend("user_elena", tracks, users)[0]["bpm"] <= 115.0 and
+                  recommend("user_elena", tracks, users)[0]["energy"] <= 0.65)),
 
-        ("6. Vitalità Commute (Clara) -> Valenza positiva ed attivazione moderata",
-         lambda: (raccomanda("user_clara", tracks, users)[0]["bpm"] >= 70.0 and
-                  raccomanda("user_clara", tracks, users)[0]["valence"] >= 0.40)),
+        ("6. Active Commute Vitality (Clara) -> Positive valence and moderate pacing",
+         lambda: (recommend("user_clara", tracks, users)[0]["bpm"] >= 70.0 and
+                  recommend("user_clara", tracks, users)[0]["valence"] >= 0.40)),
 
-        ("7. Entrainment Iso-Principle -> Monotonia decrescente (Entry -> Bridge -> Target)",
+        ("7. Iso-Principle Entrainment -> Downward monotonicity (Entry -> Bridge -> Target)",
          lambda: test_iso_principle(tracks, users) is not None),
 
-        ("8. Controindicazione Sicurezza Medica (Negativo) -> No brani ad alta energia per Sarah",
-         lambda: not sicurezza_e_controindicazioni(tracks["adrenaline_rush_rock"], users["user_sarah"])),
+        ("8. Medical Safety Barrier (Negative Test) -> Prohibit high-energy track for Sarah",
+         lambda: not safety_and_contraindications(tracks["adrenaline_rush_rock"], users["user_sarah"])),
 
-        ("9. Controindicazione Cognitiva (Negativo) -> No brani con cantato per Marco in studio",
-         lambda: not compatibile_cognitivo(tracks["euphoric_run_anthem"], users["user_marco"])),
+        ("9. Cognitive Barrier (Negative Test) -> Prohibit lyrical track for Marco in study",
+         lambda: not cognitively_compatible(tracks["euphoric_run_anthem"], users["user_marco"])),
 
-        ("10. Scoring Multi-Attributo -> Bonus per genere affine all'utente",
-         lambda: calcola_utilita(tracks["weightless_ambient"], users["user_sarah"]) > 70.0)
+        ("10. Multi-Attribute Scoring -> Affirmative bonus for user genre affinity",
+         lambda: calculate_utility(tracks["weightless_ambient"], users["user_sarah"]) > 70.0)
     ]
 
-    superati = 0
-    for nome, test_fn in tests:
+    passed = 0
+    for name, test_fn in tests:
         try:
             assert test_fn()
-            print(f" [+] {nome}: PASSATO")
-            superati += 1
+            print(f" [+] {name}: PASSED")
+            passed += 1
         except Exception as e:
-            print(f" [!] {nome}: FALLITO ({e})")
+            print(f" [!] {name}: FAILED ({e})")
 
     print("-" * 72)
-    print(f" Esito Test: {superati}/{len(tests)} Superati con successo.")
+    print(f" Test Execution Summary: {passed}/{len(tests)} Passed successfully.")
     print("=" * 72 + "\n")
 
 if __name__ == "__main__":
