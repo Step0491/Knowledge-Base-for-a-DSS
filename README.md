@@ -16,7 +16,7 @@
 
 ## 1. System Architecture & Repository Structure
 
-The codebase is engineered to be lightweight, modular, and defensible:
+The codebase is engineered to be lightweight and modular:
 
 ```
 Knowledge-Base-for-a-DSS/
