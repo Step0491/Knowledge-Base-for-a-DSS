@@ -8,15 +8,13 @@
 
 > **Abstract:** Conventional music recommendation systems suffer from the *"context-blind recommendation"* flaw: they suggest songs based on historical listening logs or aggregate popularity, completely disregarding the user's immediate psychophysiological state.
 >
-> This **Decision Support System (DSS)** overcomes this limitation by fusing mathematical audio features from **Spotify** (tempo/BPM, affective valence, energy intensity, instrumental purity) with real-time biometric telemetry from a **Smartwatch** (heart rate, stress score, physical/cognitive activity).
+> This **Decision Support System (DSS)** overcomes this limitation by merging mathematical audio features from **Spotify** (BPM, affective valence, energy intensity, instrumental purity) with real-time biometric telemetry from a **Smartwatch** (heart rate, stress score, physical/cognitive activity).
 > 
-> Leveraging **Prolog first-order logic** and a **hierarchical AND-OR inference tree**, the DSS acts as an automated real-time cognitive assistant: it evaluates candidate feasibility across physiological, cognitive, circadian, and medical safety pillars to prescribe the optimal track or synthesize a staged relaxation routine (*Altshuler's Iso-Principle*), providing transparent biofeedback explanations.
+> Leveraging **Prolog first-order logic** and a **hierarchical AND-OR inference tree**, the DSS acts as an automated real-time cognitive assistant: it evaluates candidate feasibility across physiological, cognitive, circadian, and medical safety pillars to prescribe the optimal track or synthesize a relaxation routine (*Altshuler's Iso-Principle*), providing feedback explanations.
 
 ---
 
 ## 1. System Architecture & Repository Structure
-
-The codebase is engineered to be lightweight and modular:
 
 ```
 Knowledge-Base-for-a-DSS/
@@ -87,15 +85,15 @@ The expert system decomposes high-level goals into multi-tiered backward chainin
    Enforces tempo and acoustic ceilings during sleep induction routines.
 
 ### B. Altshuler's Iso-Principle (Clinical Music Therapy)
-For patients in acute sympathetic distress (e.g. 114 BPM), abruptly playing a 60 BPM ambient track causes affective rejection. The predicate `iso_principle_session/2` generates a 3-stage entrainment session:
+For patients in acute sympathetic distress (e.g. 114 BPM), directly playing a 60 BPM ambient track causes affective rejection. The predicate `iso_principle_session/2` generates a 3-stage entrainment session:
 $$\text{Entry (105 BPM)} \longrightarrow \text{Bridge (85 BPM)} \longrightarrow \text{Target Resting Lock (60 BPM)}$$
 
 ---
 
 ## 4. Usage & Execution Guide
 
-### Option 1: Jupyter Notebook (Recommended for Oral Presentations)
-Open [`demo_walkthrough.ipynb`](demo_walkthrough.ipynb) in VS Code or JupyterLab:
+### Option 1: Jupyter Notebook
+Open [`demo_walkthrough.ipynb`](demo_walkthrough.ipynb):
 ```bash
 jupyter notebook demo_walkthrough.ipynb
 ```
@@ -110,27 +108,6 @@ To re-compile Prolog facts from the raw JSON catalogs:
 ```bash
 python generate_kb.py
 ```
-
-### Option 3: Interactive SWI-Prolog REPL
-Launch SWI-Prolog and consult the entry module:
-```bash
-swipl -s main.pl
-```
-Available top-level queries:
-```prolog
-% Query recommendation and clinical rationale for Sarah Miller (acute stress)
-?- recommend(user_sarah).
-
-% Generate 3-stage Altshuler Iso-Principle entrainment session
-?- recommend_session(user_sarah).
-
-% Run end-to-end demonstrations across all 3 scenarios
-?- demo.
-
-% Execute native Prolog logical verification test suite
-?- run_tests.
-```
-
 ---
 
 ## 5. Logical Verification Results
@@ -156,6 +133,3 @@ Executing `test_suite.py` validates all 10 formal criteria with zero errors:
 ```
 
 ---
-
-## 6. License
-Distributed under the **MIT License**. See [LICENSE](LICENSE) for details.
