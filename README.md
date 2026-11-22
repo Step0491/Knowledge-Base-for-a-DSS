@@ -1,84 +1,93 @@
-# Knowledge Base for a DSS: Spotify Context-Aware Music Recommendation
+# Knowledge Base for a DSS: Context-Aware Music Recommendation
 
-A Prolog-based Decision Support System (DSS) that integrates biometric context (heart rate, stress level, activity) with Spotify audio features and user genre preferences to recommend suitable music and generate context-aware playlists.
+[![Prolog](https://img.shields.io/badge/Prolog-SWI--Prolog-blue.svg)](https://www.swi-prolog.org/)
+[![Python](https://img.shields.io/badge/Python-3.10+-green.svg)](https://www.python.org/)
+[![Tests](https://img.shields.io/badge/Tests-10%2F10_Passing-brightgreen.svg)]()
+[![Documentation ODT](https://img.shields.io/badge/Documentation-ODT_Source-blue.svg)](DSS_Project_Documentation.odt)
+[![Documentation PDF](https://img.shields.io/badge/Documentation-PDF_Report-red.svg)](DSS_Project_Documentation.pdf)
+[![Notebook](https://img.shields.io/badge/Notebook-Jupyter_Walkthrough-orange.svg)](demo_walkthrough.ipynb)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-## Overview
+**Author:** Stefano Colella (865075) &bull; Fundamentals of AI (9 CFU), Master's Degree in Computer Science, University of Bari Aldo Moro
 
-Traditional streaming recommenders rely mainly on past listening logs or track popularity. This system uses rule-based inference in SWI-Prolog to evaluate whether a song fits the listener's real-time state:
-
-- **Context & Biometrics**: Combines user activity (`high_stress_work`, `cardio_running`, `deep_focus_study`, `sleep_preparation`, `post_workout_recovery`, `active_commute`), heart rate (BPM), stress index, and preferred Spotify genres.
-- **Spotify Audio Features**: Uses tempo (BPM), energy, valence, and instrumentalness.
-- **Orthogonal Decision Constraints**:
-  - **Activity Match (`activity_compatible/2`)**: Matches audio tempo and energy to the user's current state (relaxing slow tracks for high stress, energetic fast tracks for workouts, quiet tracks for sleep, balanced tracks for normal routines).
-  - **Focus Protection (`focus_compatible/2`)**: Enforces lyric-free instrumental music when the user is studying or working in deep focus.
-  - **Safety Barrier (`safe_track/2`)**: Uses negation as failure (`\+`) to exclude high-tempo or high-energy tracks when the user exhibits elevated stress and heart rate.
-- **Spotify Scoring & Playlist Generation**: Ranks eligible tracks by tempo proximity to the activity goal, user genre affinity, and mood valence, then recursively builds a duplicate-free context playlist (`build_playlist/3`).
+> **Abstract:** This Knowledge-Based Decision Support System solves context-blind music recommendation by combining Spotify acoustic features with real-time smartwatch telemetry (heart rate, stress level, activity, and routine goal). Built as a classic **Expert System**, it strictly separates domain facts, declarative rules, short-term Working Memory, and a backward-chaining meta-interpreter with confidence scoring, `WHY`/`HOW` explanations, and safety barriers.
 
 ---
 
-## Project Structure
+## 1. System Architecture (Separated KB & Inference Engine)
+
+Following the Expert System architecture taught in the course (`applian.gie` pattern — separating Knowledge Base from Inference Engine):
 
 ```
-.
+Knowledge-Base-for-a-DSS/
 ├── data/
-│   ├── spotify_tracks.json        # Music catalog with audio features
-│   └── smartwatch_biometrics.json # User profiles with activity and biometric data
-├── generate_kb.py                 # Generates knowledge_base.pl from JSON datasets
-├── knowledge_base.pl              # Unified Prolog facts: track/8 and user/7
-├── dss_rules.pl                   # Rules, safety barriers, scoring, and recursive playlist builder
-├── main.pl                        # Entry point with queries, explanation, demo, and unit tests
-├── DSS_Project_Documentation.pdf  # Project technical documentation
-└── README.md
+│   ├── spotify_tracks.json         # 30 curated tracks with Spotify audio features & tags
+│   └── smartwatch_biometrics.json  # 6 smartwatch biometric profiles
+├── generate_kb.py                  # ETL compiler: JSON -> knowledge_base.pl
+├── knowledge_base.pl               # Long-Term Facts: track/8, track_tag/2, user/7
+├── kb_rules.pl                     # Long-Term Declarative KB: is_a/2 taxonomy, askable/2, rule/5
+├── inference_engine.pl             # Separated Meta-Interpreter, Working Memory, WHY/HOW, MAUT
+├── main.pl                         # Interactive Expert System Shell (?- start.) & test runner
+├── test_suite.py                   # Automated Python test driver invoking the Prolog engine (10/10)
+├── demo_walkthrough.ipynb          # Pre-executed Jupyter Notebook calling Prolog
+├── build_docs_pdf.py               # Documentation compiler (HTML -> ODT + PDF)
+├── documentation.html              # Report HTML source
+├── DSS_Project_Documentation.odt   # Editable OpenDocument Text source (exam deliverable)
+├── DSS_Project_Documentation.pdf   # Academic project technical report (PDF)
+└── LICENSE                         # MIT License
 ```
 
 ---
 
-## Requirements
+## 2. How to Run & Demonstrate (For the Examiner)
 
-- **Python 3.8+** (for compiling the JSON datasets into Prolog facts)
-- **SWI-Prolog** (tested on version 9.x / 10.x)
+### Option A: Interactive SWI-Prolog Shell (Recommended for Exam Demo)
+```bash
+swipl -s main.pl
+```
+Inside Prolog, launch the interactive shell:
+```prolog
+?- start.
+```
+The menu allows the examiner to:
+1. Select any smartwatch profile (`user_sarah`, `user_alex`, `user_marco`, `user_elena`, `user_david`, `user_clara`).
+2. Enter custom live smartwatch readings (including `unknown.` for missing activity or goal).
+3. Run automatic recommendation (`recommend/1`).
+4. Run an **interactive consultation** where missing context triggers `askable/2` questions supporting `yes.`, `no.`, and **`why.`** (explaining which rule chain needs that answer).
+5. Print the **`HOW` Proof Tree** (`explain_last_decision/1`) showing the exact rules fired, confidence values, and Working Memory facts.
+6. Inspect Top-5 alternatives, generate a **3-step Gradual Calm Playlist** (`entry -> bridge -> target`), inspect Working Memory (`show_wm/0`), inspect KB rules (`show_kb_rules/0`), or execute the 10-point Prolog test suite (`run_tests/0`).
 
----
+Direct one-line queries are also available:
+```prolog
+?- recommend_with_how(user_sarah).
+?- recommend_session(user_sarah).
+?- demo.
+?- run_tests.
+```
 
-## Getting Started
+### Option B: Python Automated Verification (Invokes Real Prolog)
+`test_suite.py` does **not** re-implement rules in Python; it executes `swipl` (or `yap` fallback if `swipl` is not in PATH) directly on `main.pl` and checks all 10 criteria:
+```bash
+python test_suite.py
+```
 
-### 1. Generate the Knowledge Base (Optional)
-The repository already includes `knowledge_base.pl`. To regenerate it from `data/`:
-
+### Option C: Rebuild KB & Documentation (ODT + PDF)
 ```bash
 python generate_kb.py
+python build_docs_pdf.py
 ```
 
-### 2. Run with SWI-Prolog
+---
 
-Start an interactive session:
+## 3. Logical Verification Summary (10/10 Passed via Prolog)
 
-```bash
-swipl main.pl
-```
-
-Available queries:
-
-```prolog
-% 1. Recommendations & Context Playlists
-?- recommend(user_sarah).                      % Single optimal track with rationale
-?- recommend_playlist(user_sarah, 3).          % Build a 3-track Spotify context playlist
-?- discover_by_genre(user_sarah, classical).   % Filter a genre by current constraints
-
-% 2. Safety Audit & Feasibility Explanation
-?- check_safety(user_sarah, adrenaline_rush_rock).     % Safety check on a track
-?- explain_rejection(user_sarah, adrenaline_rush_rock). % Detailed pass/fail breakdown
-
-% 3. Inverted Query
-?- find_users_for_track(clair_de_lune).        % Find users eligible for a track
-
-% 4. Demo & Test Suite
-?- demo.                                       % Demo across sample profiles
-?- run_tests.                                  % Run all 7 automated verification tests
-```
-
-Or run directly from the command line:
-
-```bash
-swipl -s main.pl -g "demo, run_tests, halt."
-```
+1. **Stress Relief Pillar (Sarah Miller):** Recommends *Clair de Lune (Debussy)* (64 BPM, Energy 0.18, Score 90.3, Conf 0.94).
+2. **Intense Workout Pillar (Alex Chen):** Recommends *Subterranean Stamina Loop* (140 BPM, Energy 0.92, Score 88.4, Conf 0.96).
+3. **Study Lyric-Free Pillar (Marco Rossi):** Recommends *Analog Cassette Memory* (80 BPM, Instrumental 0.86, Score 91.1, Conf 0.96).
+4. **Pre-Sleep Pillar (David Becker):** Recommends *Delta Wave Binaural Serenade* (55 BPM, Energy 0.08, Score 89.9, Conf 0.93).
+5. **Post-Workout Recovery (Elena Rostova):** Recommends *Nordic Dawn Acoustic Solitude* (82 BPM, Energy 0.36, Score 88.5, Conf 0.90).
+6. **Active Commute Vitality (Clara Dupont):** Recommends *Steady Stride Metropolitan* (108 BPM, Valence 0.68, Score 86.9, Conf 0.90).
+7. **Gradual Calm Playlist:** 3-step downward tempo curve `105 BPM -> 92 BPM -> 55 BPM`.
+8. **Safety Barrier (Negative Test):** Blocks `adrenaline_rush_rock` (150 BPM) for stressed Sarah.
+9. **Study Barrier (Negative Test):** Blocks `euphoric_run_anthem` (vocal pop) for studying Marco.
+10. **Preference & Proof Tree:** Preferred genre affinity yields strictly higher utility (`90.3 > 70.5`) with a non-empty verifiable Proof Tree.

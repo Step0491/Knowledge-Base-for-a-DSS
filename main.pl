@@ -1,240 +1,378 @@
 % =========================================================================
-% Entry point: main.pl
-% Decision Support System (DSS) - Spotify Context-Aware Music Recommendation
+% PROLOG ENTRY POINT & EXPERT SYSTEM SHELL: main.pl
+% Knowledge-Based Decision Support System (Fundamentals of AI - 9 CFU)
+% Separates Facts (knowledge_base.pl), Rules (kb_rules.pl), and
+% Meta-Interpreter (inference_engine.pl).
 % =========================================================================
 
-:- consult('dss_rules.pl').
+:- consult('inference_engine.pl').
 
 % -------------------------------------------------------------------------
-% 1. RECOMMENDATION & SPOTIFY PLAYLIST QUERIES
+% 1. INTERACTIVE EXPERT SYSTEM SHELL FOR EXAM DEMO (?- start.)
 % -------------------------------------------------------------------------
 
-% recommend(+UserId)
-% Recommends the best single track for the user's current state.
-recommend(UserId) :-
-    user(UserId, Name, Activity, HeartRate, Stress, Goal, Genres),
-    format('~n------------------------------------------------------------------------~n'),
-    format(' USER PROFILE: ~w (~w)~n', [Name, UserId]),
-    format(' Activity: ~w | Heart Rate: ~0f BPM | Stress: ~0f/100~n', [Activity, HeartRate, Stress]),
-    format(' Goal: ~w | Preferred Genres: ~w~n', [Goal, Genres]),
-    format('------------------------------------------------------------------------~n'),
-    ( best_track(UserId, TrackId, UtilityScore)
-    -> track(TrackId, Title, Artist, Genre, BPM, Valence, Energy, Instrumentalness),
-       format(' Recommended Track: "~w" - ~w~n', [Title, Artist]),
-       format(' Match Score: ~1f/100 | Genre: ~w~n', [UtilityScore, Genre]),
-       format(' Audio Features: ~0f BPM | Energy: ~2f | Valence: ~2f | Instrumental: ~2f~n', [BPM, Energy, Valence, Instrumentalness]),
-       explain_choice(Activity, BPM, Instrumentalness, Genre, Genres)
-    ;  format(' No track in the catalog satisfies the constraints for this user.~n')
-    ),
-    format('------------------------------------------------------------------------~n~n').
+:- dynamic current_user/1.
+current_user(user_sarah).
 
-% recommend_playlist(+UserId, +Length)
-% Generates a personalized context-aware playlist of up to Length tracks.
-recommend_playlist(UserId, Length) :-
-    user(UserId, Name, Activity, HeartRate, Stress, Goal, _),
+%! start
+% Launches the interactive Expert System shell for live consultation.
+start :-
+    load_user_to_wm(user_sarah),
+    retractall(current_user(_)),
+    assertz(current_user(user_sarah)),
+    shell_loop.
+
+shell_loop :-
+    current_user(U),
     format('~n========================================================================~n'),
-    format(' SPOTIFY CONTEXT PLAYLIST (Top ~w Tracks)~n', [Length]),
-    format(' User: ~w | Activity: ~w | HR: ~0f BPM | Stress: ~0f/100~n', [Name, Activity, HeartRate, Stress]),
-    format(' Goal: ~w~n', [Goal]),
+    format(' EXPERT SYSTEM SHELL: CONTEXT-AWARE MUSIC DSS (Active User: ~w)~n', [U]),
+    format('========================================================================~n'),
+    format('  1. Select smartwatch user profile (sarah/alex/marco/elena/david/clara)~n'),
+    format('  2. Enter custom live smartwatch readings (supports "unknown" fields)~n'),
+    format('  3. Recommend best track (automatic inference from Working Memory)~n'),
+    format('  4. Interactive consultation (asks missing info; supports yes/no/why)~n'),
+    format('  5. Explain HOW the last recommendation was deduced (Proof Tree)~n'),
+    format('  6. Show top-5 alternative tracks for active user~n'),
+    format('  7. Generate 3-step Gradual Calm Playlist (entry -> bridge -> target)~n'),
+    format('  8. Inspect Working Memory (Short-Term Case Facts)~n'),
+    format('  9. Inspect Knowledge Base Rules (Long-Term Domain Rules)~n'),
+    format(' 10. Run 10-point Prolog Logical Verification Suite~n'),
+    format('  0. Exit shell~n'),
     format('------------------------------------------------------------------------~n'),
-    ( build_playlist(UserId, Length, Playlist)
-    -> print_playlist_items(Playlist, UserId, 1),
-       playlist_avg_bpm(Playlist, AvgBPM),
-       length(Playlist, Count),
-       format('------------------------------------------------------------------------~n'),
-       format(' Summary: ~w tracks selected | Average Playlist Tempo: ~1f BPM~n', [Count, AvgBPM])
-    ;  format(' Unable to generate a playlist for this user with current catalog.~n')
+    format('Choose option (e.g., 3.): '),
+    read(Choice),
+    handle_menu(Choice).
+
+handle_menu(0) :-
+    !,
+    format('Exiting Expert System shell.~n').
+
+handle_menu(1) :-
+    !,
+    format('Available profiles:~n'),
+    for_each(user(Id, Name, Act, HR, Stress, Goal, _),
+             format('  - ~w : ~w (Activity: ~w, HR: ~0f, Stress: ~0f, Goal: ~w)~n',
+                    [Id, Name, Act, HR, Stress, Goal])),
+    format('Enter profile atom (e.g., user_sarah.): '),
+    read(UserId),
+    ( user(UserId, _, _, _, _, _, _)
+    -> load_user_to_wm(UserId),
+       retractall(current_user(_)),
+       assertz(current_user(UserId)),
+       format('[+] Loaded ~w into Working Memory.~n', [UserId])
+    ;  format('[!] Unknown profile: ~w~n', [UserId])
+    ),
+    shell_loop.
+
+handle_menu(2) :-
+    !,
+    format('Enter custom readings as Prolog terms ending with a dot (.).~n'),
+    format('Heart Rate BPM (number, e.g., 112.): '), read(HRNum),
+    format('Stress Level 0-100 (number, e.g., 78.): '), read(StressNum),
+    format('Activity (e.g., high_stress_work. / deep_focus_study. / cardio_running. / sleep_preparation. / unknown.): '), read(Act),
+    format('Goal (e.g., stress_downregulation. / deep_focus_flow. / cardio_peak_performance. / sleep_induction. / unknown.): '), read(Goal),
+    format('Preferred genre list (e.g., [ambient, classical].): '), read(Genres),
+    HR is float(HRNum),
+    Stress is float(StressNum),
+    set_custom_user_wm(custom_user, 'Live Smartwatch User', Act, HR, Stress, Goal, Genres),
+    retractall(current_user(_)),
+    assertz(current_user(custom_user)),
+    format('[+] Custom telemetry loaded into Working Memory as custom_user.~n'),
+    shell_loop.
+
+handle_menu(3) :-
+    !,
+    set_interactive(false),
+    current_user(U),
+    recommend(U),
+    shell_loop.
+
+handle_menu(4) :-
+    !,
+    set_interactive(true),
+    current_user(U),
+    retractall(wm_fact(user_answer(_, _))),
+    recommend(U),
+    set_interactive(false),
+    shell_loop.
+
+handle_menu(5) :-
+    !,
+    current_user(U),
+    explain_last_decision(U),
+    shell_loop.
+
+handle_menu(6) :-
+    !,
+    set_interactive(false),
+    current_user(U),
+    show_top_alternatives(U, 5),
+    shell_loop.
+
+handle_menu(7) :-
+    !,
+    current_user(U),
+    recommend_session(U),
+    shell_loop.
+
+handle_menu(8) :-
+    !,
+    show_wm,
+    shell_loop.
+
+handle_menu(9) :-
+    !,
+    show_kb_rules,
+    shell_loop.
+
+handle_menu(10) :-
+    !,
+    run_tests,
+    shell_loop.
+
+handle_menu(Other) :-
+    format('[!] Invalid option: ~w. Please enter a number followed by a dot (e.g. 3.).~n', [Other]),
+    shell_loop.
+
+% -------------------------------------------------------------------------
+% 2. RECOMMENDATION, ALTERNATIVES & EXPLANATION COMMANDS
+% -------------------------------------------------------------------------
+
+%! recommend(+UserId)
+% Evaluates the best track for UserId using the separated inference engine.
+recommend(UserId) :-
+    ( wm_fact(user_name(UserId, Name))
+    -> wm_fact(user_activity(UserId, Activity)),
+       wm_fact(user_heart_rate(UserId, HeartRate)),
+       wm_fact(user_stress(UserId, Stress)),
+       wm_fact(user_goal(UserId, Goal))
+    ;  load_user_to_wm(UserId),
+       wm_fact(user_name(UserId, Name)),
+       wm_fact(user_activity(UserId, Activity)),
+       wm_fact(user_heart_rate(UserId, HeartRate)),
+       wm_fact(user_stress(UserId, Stress)),
+       wm_fact(user_goal(UserId, Goal))
+    ),
+    format('~n========================================================================~n'),
+    format(' DECISION SUPPORT SYSTEM: CONTEXT-AWARE MUSIC RECOMMENDATION~n'),
+    format('========================================================================~n'),
+    format(' [*] Smartwatch Profile (Working Memory):~n'),
+    format('     - Name: ~w (ID: ~w)~n', [Name, UserId]),
+    format('     - Activity: ~w | Heart Rate: ~0f BPM | Stress: ~0f/100~n', [Activity, HeartRate, Stress]),
+    format('     - Routine Goal: ~w~n', [Goal]),
+    format('~n [*] Inference Engine Result:~n'),
+    ( best_track_with_proof(UserId, TrackId, UtilityScore, Conf, _Proof)
+    -> track(TrackId, Title, Artist, Genre, BPM, Valence, Energy, Instrumentalness),
+       format('     -> SELECTED TRACK: "~w" by ~w~n', [Title, Artist]),
+       format('     -> Multi-Criteria Utility: ~1f / 100.0 | Rule Confidence: ~2f | Genre: ~w~n',
+              [UtilityScore, Conf, Genre]),
+       format('     -> Audio Profile: BPM ~0f | Energy ~2f | Valence ~2f | Instrumental ~2f~n',
+              [BPM, Energy, Valence, Instrumentalness]),
+       format('     -> Tip: call explain_last_decision(~w). to inspect the full HOW proof tree.~n', [UserId])
+    ;  format('     [!] No track satisfies all physiological, study, safety, and sleep rules.~n')
     ),
     format('========================================================================~n~n').
 
-print_playlist_items([], _, _).
-print_playlist_items([TId|Rest], UserId, Index) :-
-    track(TId, Title, Artist, Genre, BPM, _, Energy, _),
-    calculate_utility(TId, UserId, Score),
-    format(' ~w. "~w" - ~w (~w, ~0f BPM, E:~2f) [Score: ~1f]~n',
-           [Index, Title, Artist, Genre, BPM, Energy, Score]),
-    NextIndex is Index + 1,
-    print_playlist_items(Rest, UserId, NextIndex).
+%! recommend_with_how(+UserId)
+% Prints recommendation immediately followed by the full Proof Tree (HOW).
+recommend_with_how(UserId) :-
+    recommend(UserId),
+    explain_last_decision(UserId).
 
-% discover_by_genre(+UserId, +Genre)
-% Checks which tracks of a given genre are suitable for the user right now.
-discover_by_genre(UserId, Genre) :-
-    user(UserId, Name, Activity, _, _, _, _),
-    format('~n------------------------------------------------------------------------~n'),
-    format(' GENRE FILTER: "~w" for ~w (~w)~n', [Genre, Name, Activity]),
-    format('------------------------------------------------------------------------~n'),
-    findall(Score-TId, (
-        track(TId, _, _, Genre, _, _, _, _),
-        recommendable_track(TId, UserId),
-        calculate_utility(TId, UserId, Score)
-    ), Matches),
-    sort(1, @>=, Matches, Sorted),
-    ( Sorted == []
-    -> format(' No "~w" tracks match the current activity and safety constraints.~n', [Genre])
-    ;  print_genre_matches(Sorted)
+%! show_top_alternatives(+UserId, +Limit)
+show_top_alternatives(UserId, Limit) :-
+    ( wm_fact(user_goal(UserId, _)) -> true ; load_user_to_wm(UserId) ),
+    format('~n--- TOP ~w COMPATIBLE TRACKS FOR ~w ---~n', [Limit, UserId]),
+    ( evaluate_candidates(UserId, Ranked)
+    -> print_ranked_prefix(Ranked, 1, Limit)
+    ;  format('  (No compatible tracks found)~n')
     ),
-    format('------------------------------------------------------------------------~n~n').
+    format('----------------------------------------------------~n').
 
-print_genre_matches([]).
-print_genre_matches([Score-TId|Rest]) :-
-    track(TId, Title, Artist, _, BPM, _, Energy, _),
-    format(' * [Score: ~1f] "~w" - ~w (~0f BPM, Energy: ~2f)~n', [Score, Title, Artist, BPM, Energy]),
-    print_genre_matches(Rest).
+print_ranked_prefix([], _, _).
+print_ranked_prefix(_, N, Limit) :- N > Limit, !.
+print_ranked_prefix([item(Score, TId, Conf, _)|Rest], N, Limit) :-
+    track(TId, Title, Artist, Genre, BPM, _, Energy, Inst),
+    format('  ~w. "~w" by ~w [~w] | Score: ~1f | Conf: ~2f | ~0f BPM, E:~2f, Inst:~2f~n',
+           [N, Title, Artist, Genre, Score, Conf, BPM, Energy, Inst]),
+    N1 is N + 1,
+    print_ranked_prefix(Rest, N1, Limit).
 
-% -------------------------------------------------------------------------
-% 2. EXPLANATION & AUDIT QUERIES
-% -------------------------------------------------------------------------
+%! show_kb_rules
+show_kb_rules :-
+    format('~n--- DECLARATIVE DOMAIN KNOWLEDGE BASE (kb_rules.pl) ---~n'),
+    for_each(rule(Id, Head, Body, Weight, Desc),
+             format('  [~w] (w=~2f) ~w :- ~w~n      // ~w~n', [Id, Weight, Head, Body, Desc])),
+    format('-------------------------------------------------------~n').
 
-explain_choice(high_stress_work, BPM, Instrumentalness, Genre, PrefGenres) :-
-    !,
-    format(' Rationale: High stress detected. Selected a calming tempo (~0f BPM)~n', [BPM]),
-    format(' and instrumental track (~2f) to reduce agitation.', [Instrumentalness]),
-    check_genre_note(Genre, PrefGenres).
-
-explain_choice(cardio_running, BPM, _, Genre, PrefGenres) :-
-    !,
-    format(' Rationale: Cardio workout in progress. Selected a fast tempo (~0f BPM)~n', [BPM]),
-    format(' to keep pace during exercise.', []),
-    check_genre_note(Genre, PrefGenres).
-
-explain_choice(deep_focus_study, _, Instrumentalness, Genre, PrefGenres) :-
-    !,
-    format(' Rationale: Study session detected. Selected an instrumental track (~2f)~n', [Instrumentalness]),
-    format(' to prevent vocal distractions.', []),
-    check_genre_note(Genre, PrefGenres).
-
-explain_choice(_, _, _, Genre, PrefGenres) :-
-    format(' Rationale: Audio tempo and energy match your current activity goal.', []),
-    check_genre_note(Genre, PrefGenres).
-
-check_genre_note(Genre, PrefGenres) :-
-    ( member(Genre, PrefGenres)
-    -> format(' Matches your Spotify taste (~w).~n', [Genre])
-    ;  format('~n') ).
-
-% explain_rejection(+UserId, +TrackId)
-% Explains which constraints pass and which fail for a given track.
-explain_rejection(UserId, TrackId) :-
-    user(UserId, Name, Activity, _, _, _, _),
-    track(TrackId, Title, _, _, _, _, _, _),
-    format('~n------------------------------------------------------------------------~n'),
-    format(' FEASIBILITY CHECK: "~w" for ~w (~w)~n', [Title, Name, Activity]),
-    format('------------------------------------------------------------------------~n'),
-    ( activity_compatible(TrackId, UserId)
-    -> format('  [PASS] Activity match: compatible tempo and energy.~n')
-    ;  format('  [FAIL] Activity match: incompatible tempo or energy for current activity.~n') ),
-    ( focus_compatible(TrackId, UserId)
-    -> format('  [PASS] Focus check: compatible with current cognitive mode.~n')
-    ;  format('  [FAIL] Focus check: contains vocals or high energy during study.~n') ),
-    ( safe_track(TrackId, UserId)
-    -> format('  [PASS] Safety check: no overstimulation risk.~n')
-    ;  format('  [FAIL] Safety check: unsafe BPM/energy given high stress or heart rate.~n') ),
-    ( recommendable_track(TrackId, UserId)
-    -> format(' RESULT: Track is ELIGIBLE.~n')
-    ;  format(' RESULT: Track is REJECTED.~n') ),
-    format('------------------------------------------------------------------------~n~n').
-
-% check_safety(+UserId, +TrackId)
-% Checks whether a specific track is safe or contraindicated for the user.
-check_safety(UserId, TrackId) :-
-    user(UserId, Name, _, HR, Stress, _, _),
-    track(TrackId, Title, _, _, BPM, _, Energy, _),
-    format('~n--- Safety Audit: "~w" for ~w ---~n', [Title, Name]),
-    format(' User State: Heart Rate ~0f BPM | Stress ~0f/100~n', [HR, Stress]),
-    format(' Track Specs: ~0f BPM | Energy ~2f~n', [BPM, Energy]),
-    ( safe_track(TrackId, UserId)
-    -> format(' Assessment: [SAFE] Track does not violate safety limits.~n~n')
-    ;  format(' Assessment: [UNSAFE] Rejected due to high stress/heart rate risk.~n~n')
-    ).
-
-% find_users_for_track(+TrackId)
-% Inverted query: lists all users who can currently listen to this track.
-find_users_for_track(TrackId) :-
-    track(TrackId, Title, Artist, Genre, BPM, _, _, _),
-    format('~n------------------------------------------------------------------------~n'),
-    format(' ELIGIBLE USERS FOR: "~w" - ~w (~w, ~0f BPM)~n', [Title, Artist, Genre, BPM]),
-    format('------------------------------------------------------------------------~n'),
-    findall(UName-UId, (
-        user(UId, UName, _, _, _, _, _),
-        recommendable_track(TrackId, UId)
-    ), Eligible),
-    ( Eligible == []
-    -> format(' No users currently match this track.~n')
-    ;  print_user_matches(Eligible)
+%! recommend_session(+UserId)
+% Synthesizes a 3-step Gradual Calm Playlist (Entry -> Bridge -> Target).
+recommend_session(UserId) :-
+    ( wm_fact(user_name(UserId, Name))
+    -> wm_fact(user_heart_rate(UserId, HeartRate)),
+       wm_fact(user_stress(UserId, Stress))
+    ;  load_user_to_wm(UserId),
+       wm_fact(user_name(UserId, Name)),
+       wm_fact(user_heart_rate(UserId, HeartRate)),
+       wm_fact(user_stress(UserId, Stress))
     ),
-    format('------------------------------------------------------------------------~n~n').
-
-print_user_matches([]).
-print_user_matches([Name-Id|Rest]) :-
-    user(Id, _, Activity, HR, Stress, _, _),
-    format(' * ~w (ID: ~w) | Activity: ~w | HR: ~0f BPM | Stress: ~0f/100~n', [Name, Id, Activity, HR, Stress]),
-    print_user_matches(Rest).
+    format('~n+======================================================================+~n'),
+    format('| 3-STEP GRADUAL CALM PLAYLIST (ENTRY -> BRIDGE -> TARGET)             |~n'),
+    format('+======================================================================+~n'),
+    format('| User: ~w | Heart Rate: ~0f BPM | Stress: ~0f/100~n', [Name, HeartRate, Stress]),
+    format('+----------------------------------------------------------------------+~n'),
+    ( gradual_calm_playlist(UserId, [stage(entry, T1), stage(bridge, T2), stage(target, T3)])
+    -> track(T1, Title1, _, _, BPM1, _, Eng1, _),
+       track(T2, Title2, _, _, BPM2, _, Eng2, _),
+       track(T3, Title3, _, _, BPM3, _, Eng3, _),
+       format('| 1. [ENTRY]  ~w (~0f BPM, Energy: ~2f)~n', [Title1, BPM1, Eng1]),
+       format('| 2. [BRIDGE] ~w (~0f BPM, Energy: ~2f)~n', [Title2, BPM2, Eng2]),
+       format('| 3. [TARGET] ~w (~0f BPM, Energy: ~2f)~n', [Title3, BPM3, Eng3]),
+       format('+----------------------------------------------------------------------+~n'),
+       format('| Trajectory: ~0f BPM -> ~0f BPM -> ~0f BPM (Smooth Calming Curve)~n', [BPM1, BPM2, BPM3])
+    ;  format('| [!] Unable to build a 3-step calming sequence from current catalog.~n')
+    ),
+    format('+======================================================================+~n~n').
 
 % -------------------------------------------------------------------------
-% 3. DEMO & AUTOMATED VERIFICATION
+% 3. DEMONSTRATION & MACHINE-READABLE PYTHON BRIDGE
 % -------------------------------------------------------------------------
 
+%! demo
+% Executes demonstration across three representative cases with HOW proof trees.
 demo :-
-    format('~n--- Case 1: High-Stress Work (Sarah Miller) ---~n'),
-    recommend(user_sarah),
-    recommend_playlist(user_sarah, 3),
-    format('~n--- Case 2: Cardio Running (Alex Chen) ---~n'),
+    set_interactive(false),
+    format('~n>>> CASE 1: High Work Stress & Gradual Calming (Sarah Miller) <<<~n'),
+    recommend_with_how(user_sarah),
+    recommend_session(user_sarah),
+    format('~n>>> CASE 2: Intense Running Workout (Alex Chen) <<<~n'),
     recommend(user_alex),
-    format('~n--- Case 3: Deep Focus Study (Marco Rossi) ---~n'),
+    format('~n>>> CASE 3: Lyric-Free Deep Study Focus (Marco Rossi) <<<~n'),
     recommend(user_marco).
 
+%! py_export_all
+% Machine-readable output invoked by Python test_suite.py and demo_walkthrough.ipynb
+% so that Python inspects actual SWI-Prolog/Prolog inference results.
+py_export_all :-
+    set_interactive(false),
+    for_each(user(UId, _, _, _, _, _, _), (
+        best_track_with_proof(UId, TId, Score, Conf, _),
+        track(TId, Title, Artist, Genre, BPM, Val, Eng, Inst),
+        format('BEST|~w|~w|~w|~w|~w|~1f|~2f|~2f|~2f|~2f|~2f~n',
+               [UId, TId, Title, Artist, Genre, BPM, Val, Eng, Inst, Score, Conf])
+    )),
+    ( gradual_calm_playlist(user_sarah, [stage(entry, S1), stage(bridge, S2), stage(target, S3)])
+    -> track(S1, N1, _, _, B1, _, E1, _),
+       track(S2, N2, _, _, B2, _, E2, _),
+       track(S3, N3, _, _, B3, _, E3, _),
+       format('PLAYLIST|user_sarah|~w|~w|~0f|~2f|~w|~w|~0f|~2f|~w|~w|~0f|~2f~n',
+              [S1, N1, B1, E1, S2, N2, B2, E2, S3, N3, B3, E3])
+    ;  true
+    ),
+    load_user_to_wm(user_sarah),
+    ( \+ prove(safe_for_user(adrenaline_rush_rock, user_sarah), [], _, _)
+    -> format('BARRIER|safety_sarah_rock|BLOCKED~n')
+    ;  format('BARRIER|safety_sarah_rock|ALLOWED~n')
+    ),
+    load_user_to_wm(user_marco),
+    ( \+ prove(study_compatible(euphoric_run_anthem, user_marco), [], _, _)
+    -> format('BARRIER|study_marco_vocal|BLOCKED~n')
+    ;  format('BARRIER|study_marco_vocal|ALLOWED~n')
+    ),
+    load_user_to_wm(user_sarah),
+    calculate_utility(clair_de_lune, user_sarah, 0.94, ScorePref),
+    calculate_utility(weightless_ambient, user_sarah, 0.96, ScorePref2),
+    set_custom_user_wm(sarah_nopref, 'Sarah NoPref', high_stress_work, 114.0, 84.0, stress_downregulation, []),
+    calculate_utility(clair_de_lune, sarah_nopref, 0.94, ScoreNoPref),
+    format('PREF_CHECK|~2f|~2f|~2f~n', [ScorePref, ScorePref2, ScoreNoPref]).
+
+% -------------------------------------------------------------------------
+% 4. NATIVE PROLOG 10-POINT LOGICAL VERIFICATION SUITE
+% -------------------------------------------------------------------------
+
+%! run_tests
+% Validates all 10 criteria natively in Prolog; fails if any assertion fails.
 run_tests :-
-    format('~nRunning logic verification tests...~n'),
+    set_interactive(false),
+    format('~n========================================================================~n'),
+    format(' PROLOG LOGICAL VERIFICATION SUITE (SEPARATED KB + INFERENCE ENGINE)~n'),
+    format('========================================================================~n'),
 
-    % Test 1: Stress reduction selects slow, low-energy track
-    best_track(user_sarah, B_Sarah, _),
-    track(B_Sarah, _, _, _, BPM_Sarah, _, Eng_Sarah, _),
-    BPM_Sarah =< 75.0, Eng_Sarah =< 0.35,
-    format('  [PASS] Test 1: High-stress user gets slow, low-energy track~n'),
+    % 1. Stress relief pillar (Sarah)
+    best_track(user_sarah, T1, _),
+    track(T1, _, _, _, BPM1, _, Eng1, Inst1),
+    BPM1 =< 75.0, Eng1 =< 0.35, Inst1 >= 0.70,
+    format(' [+] 1. Stress Relief Pillar (Sarah): PASSED (~w)~n', [T1]),
 
-    % Test 2: Cardio running selects fast, energetic track
-    best_track(user_alex, B_Alex, _),
-    track(B_Alex, _, _, _, BPM_Alex, _, Eng_Alex, _),
-    BPM_Alex >= 120.0, Eng_Alex >= 0.70,
-    format('  [PASS] Test 2: Cardio user gets high-tempo, high-energy track~n'),
+    % 2. Workout boost pillar (Alex)
+    best_track(user_alex, T2, _),
+    track(T2, _, _, _, BPM2, _, Eng2, _),
+    BPM2 >= 120.0, Eng2 >= 0.70,
+    format(' [+] 2. Workout Pace Pillar (Alex): PASSED (~w)~n', [T2]),
 
-    % Test 3: Study mode enforces instrumental tracks
-    best_track(user_marco, B_Marco, _),
-    track(B_Marco, _, _, _, _, _, _, Inst_Marco),
-    Inst_Marco >= 0.70,
-    format('  [PASS] Test 3: Study user gets instrumental track~n'),
+    % 3. Study focus pillar (Marco)
+    best_track(user_marco, T3, _),
+    track(T3, _, _, _, BPM3, _, Eng3, Inst3),
+    Inst3 >= 0.70, BPM3 >= 70.0, BPM3 =< 95.0, Eng3 =< 0.55,
+    format(' [+] 3. Study Lyric-Free Pillar (Marco): PASSED (~w)~n', [T3]),
 
-    % Test 4: Sleep preparation enforces low BPM and low energy
-    best_track(user_david, B_David, _),
-    track(B_David, _, _, _, BPM_David, _, Eng_David, _),
-    BPM_David =< 64.0, Eng_David =< 0.20,
-    format('  [PASS] Test 4: Sleep preparation gets quiet slow track~n'),
+    % 4. Pre-sleep compatibility (David)
+    best_track(user_david, T4, _),
+    track(T4, _, _, _, BPM4, _, Eng4, Inst4),
+    BPM4 =< 64.0, Eng4 =< 0.20, Inst4 >= 0.85,
+    format(' [+] 4. Pre-Sleep Pillar (David): PASSED (~w)~n', [T4]),
 
-    % Test 5: Playlist generation produces valid safe tracks without duplicates
-    build_playlist(user_sarah, 3, PlaylistSarah),
-    length(PlaylistSarah, 3),
-    forall(member(T, PlaylistSarah), safe_track(T, user_sarah)),
-    format('  [PASS] Test 5: Generated playlist respects safety limits on all tracks~n'),
+    % 5. Post-workout recovery (Elena)
+    best_track(user_elena, T5, _),
+    track(T5, _, _, _, BPM5, Val5, Eng5, _),
+    BPM5 >= 70.0, BPM5 =< 115.0, Eng5 =< 0.65, Val5 >= 0.40,
+    format(' [+] 5. Recovery Balanced Pillar (Elena): PASSED (~w)~n', [T5]),
 
-    % Test 6: Negative test - safety barrier blocks high-energy rock for Sarah
-    ( \+ safe_track(adrenaline_rush_rock, user_sarah)
-    -> format('  [PASS] Test 6: Safety rule rejects high-energy rock for stressed user~n')
-    ;  format('  [FAIL] Test 6 failed~n') ),
+    % 6. Active commute vitality (Clara)
+    best_track(user_clara, T6, _),
+    track(T6, _, _, _, BPM6, Val6, Eng6, _),
+    BPM6 >= 70.0, BPM6 =< 115.0, Eng6 =< 0.65, Val6 >= 0.40,
+    format(' [+] 6. Active Commute Pillar (Clara): PASSED (~w)~n', [T6]),
 
-    % Test 7: Negative test - focus rule blocks vocal pop for Marco
-    ( \+ focus_compatible(euphoric_run_anthem, user_marco)
-    -> format('  [PASS] Test 7: Focus rule rejects vocal track during study~n')
-    ;  format('  [FAIL] Test 7 failed~n') ),
+    % 7. Gradual calm playlist monotonic tempo descent
+    gradual_calm_playlist(user_sarah, [stage(entry, P1), stage(bridge, P2), stage(target, P3)]),
+    track(P1, _, _, _, PB1, _, _, _),
+    track(P2, _, _, _, PB2, _, _, _),
+    track(P3, _, _, _, PB3, _, _, _),
+    PB1 >= PB2, PB2 >= PB3,
+    format(' [+] 7. Gradual Calm Playlist Monotonicity: PASSED (~0f -> ~0f -> ~0f BPM)~n', [PB1, PB2, PB3]),
 
-    format('All 7 tests passed.~n~n').
+    % 8. Safety barrier negative test (Sarah + adrenaline_rush_rock)
+    load_user_to_wm(user_sarah),
+    \+ prove(safe_for_user(adrenaline_rush_rock, user_sarah), [], _, _),
+    format(' [+] 8. Safety Barrier (Negative Test - High Stress + Rock): PASSED~n'),
+
+    % 9. Study focus negative test (Marco + euphoric_run_anthem)
+    load_user_to_wm(user_marco),
+    \+ prove(study_compatible(euphoric_run_anthem, user_marco), [], _, _),
+    format(' [+] 9. Study Lyric Barrier (Negative Test - Study + Vocal Pop): PASSED~n'),
+
+    % 10. Multi-criteria preference bonus + Proof Tree generation
+    load_user_to_wm(user_sarah),
+    best_track_with_proof(user_sarah, T1, SWithPref, Conf1, Proof1),
+    Proof1 \= empty_and, Conf1 > 0.80,
+    set_custom_user_wm(sarah_nopref, 'Sarah NoPref', high_stress_work, 114.0, 84.0, stress_downregulation, []),
+    calculate_utility(T1, sarah_nopref, Conf1, SWithoutPref),
+    SWithPref > SWithoutPref,
+    format(' [+] 10. Utility Preference Bonus & Proof Tree: PASSED (~1f > ~1f)~n', [SWithPref, SWithoutPref]),
+
+    format('------------------------------------------------------------------------~n'),
+    format(' Summary: 10/10 Prolog verification checks PASSED.~n'),
+    format('========================================================================~n~n').
 
 help :-
-    format('~nAvailable DSS Commands:~n'),
-    format('  ?- recommend(user_sarah).                   - Top track recommendation with rationale.~n'),
-    format('  ?- recommend_playlist(user_sarah, 3).       - Generate context-aware Spotify playlist.~n'),
-    format('  ?- discover_by_genre(user_sarah, classical). - Filter genre by user constraints.~n'),
-    format('  ?- explain_rejection(user_sarah, TrackId).   - Breakdown of pass/fail rules for a track.~n'),
-    format('  ?- check_safety(user_sarah, TrackId).        - Safety check for a specific track.~n'),
-    format('  ?- find_users_for_track(TrackId).            - Inverted query: eligible users for a track.~n'),
-    format('  ?- demo.                                     - Run demo across sample users.~n'),
-    format('  ?- run_tests.                                - Run automated verification tests.~n~n').
+    format('~nAvailable Commands in SWI-Prolog:~n'),
+    format('  ?- start.                         - Launch interactive Expert System menu (recommended for demo).~n'),
+    format('  ?- recommend(user_sarah).         - Recommend optimal track for Sarah.~n'),
+    format('  ?- recommend_with_how(user_sarah).- Recommend track + print HOW proof tree.~n'),
+    format('  ?- explain_last_decision(user_sarah). - Print HOW proof tree for last query.~n'),
+    format('  ?- recommend_session(user_sarah). - Generate 3-step Gradual Calm Playlist.~n'),
+    format('  ?- show_wm.                       - Inspect Short-Term Working Memory.~n'),
+    format('  ?- show_kb_rules.                 - Inspect Declarative Knowledge Base rules.~n'),
+    format('  ?- demo.                          - Run 3 representative clinical/routine cases.~n'),
+    format('  ?- run_tests.                     - Run 10-point Prolog logical verification suite.~n~n').
